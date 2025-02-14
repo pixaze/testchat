@@ -1,20 +1,23 @@
 import { auth, db } from "./firebase-config.js";
-import { collection, getDocs, doc, updateDoc } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js";
+import { doc, getDoc } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js";
 
 // Cek apakah user adalah admin
 auth.onAuthStateChanged(async (user) => {
     if (user) {
-        const adminEmail = "admin@email.com"; // Ganti dengan email admin asli
-        if (user.email === adminEmail) {
-            loadUsers();
+        const userRef = doc(db, "users", user.uid);
+        const userSnap = await getDoc(userRef);
+
+        if (userSnap.exists() && userSnap.data().isAdmin) {
+            loadUsers(); // Jika admin, load daftar user
         } else {
             alert("Anda bukan admin!");
-            window.location.href = "index.html";
+            window.location.href = "index.html"; // Redirect jika bukan admin
         }
     } else {
-        window.location.href = "login.html";
+        window.location.href = "login.html"; // Redirect jika belum login
     }
 });
+
 
 // Memuat daftar user
 async function loadUsers() {
