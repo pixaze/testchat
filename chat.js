@@ -109,3 +109,38 @@ async function uploadFile() {
 
     alert("File berhasil dikirim!");
 }
+
+import { auth, db } from "./firebase-config.js";
+import { doc, updateDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js";
+
+let typingTimeout;
+
+// Fungsi untuk mendeteksi saat user mengetik
+function handleTyping() {
+    if (!selectedUserId) return;
+
+    const userDocRef = doc(db, "users", auth.currentUser.uid);
+    updateDoc(userDocRef, { typingTo: selectedUserId });
+
+    clearTimeout(typingTimeout);
+    typingTimeout = setTimeout(() => {
+        updateDoc(userDocRef, { typingTo: "" });
+    }, 2000);
+}
+
+// Menampilkan indikator mengetik
+function listenForTyping() {
+    const typingIndicator = document.getElementById("typing-indicator");
+
+    onSnapshot(doc(db, "users", selectedUserId), (doc) => {
+        const userData = doc.data();
+        if (userData.typingTo === auth.currentUser.uid) {
+            typingIndicator.innerText = "Sedang mengetik...";
+        } else {
+            typingIndicator.innerText = "";
+        }
+    });
+}
+
+// Panggil fungsi saat user mulai mengetik
+document.getElementById("message").addEventListener("input", handleTyping);
