@@ -186,3 +186,25 @@ function stopRecording() {
         audioChunks = [];
     };
 }
+
+function loadUsers() {
+    const userList = document.getElementById("user-list");
+    userList.innerHTML = "";
+
+    onSnapshot(collection(db, "users"), (snapshot) => {
+        snapshot.forEach((doc) => {
+            const user = doc.data();
+            if (user.email !== auth.currentUser.email) {
+                const div = document.createElement("div");
+                div.classList.add("user");
+                div.innerHTML = `
+                    <img src="${user.avatar}" width="40">
+                    <span>${user.username} ${user.verified ? "✔️" : ""}</span>
+                    <span>${user.online ? "🟢 Online" : "⚪ Offline"}</span>
+                `;
+                div.onclick = () => startChat(doc.id, user.username);
+                userList.appendChild(div);
+            }
+        });
+    });
+}
