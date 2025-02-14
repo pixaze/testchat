@@ -144,3 +144,45 @@ function listenForTyping() {
 
 // Panggil fungsi saat user mulai mengetik
 document.getElementById("message").addEventListener("input", handleTyping);
+
+import { storage } from "./firebase-config.js";
+import { ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-storage.js";
+
+let mediaRecorder;
+let audioChunks = [];
+const recordButton = document.getElementById("record-button");
+
+recordButton.addEventListener("mousedown", startRecording);
+recordButton.addEventListener("mouseup", stopRecording);
+
+function startRecording() {
+    navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
+        mediaRecorder = new MediaRecorder(stream);
+        mediaRecorder.start();
+
+        mediaRecorder.ondataavailable = (event) => {
+            audioChunks.push(event.data);
+        };
+    });
+}
+
+function stopRecording() {
+    mediaRecorder.stop();
+    mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
+        const audioFile = new File([audioBlob], "voice-note.webm", { type: "audio/webm" });
+
+        const storageRef = ref(storage, `voice_notes/${Date.now()}.webm`);
+        await uploadBytes(storageRef, audioFile);
+        const audioURL = await getDownloadURL(storageRef);
+
+        await addDoc(collection(db, "messages"), {
+            sender: auth.currentUser.uid,
+            receiver: selectedUserId,
+            voiceNote: audioURL,
+            timestamp: serverTimestamp()
+        });
+
+        audioChunks = [];
+    };
+}
