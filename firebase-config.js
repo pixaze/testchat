@@ -6,12 +6,12 @@ import { getStorage } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-st
 
 // Konfigurasi Firebase (Ganti dengan konfigurasi proyekmu)
 const firebaseConfig = {
-    apiKey: "YOUR_API_KEY",
-    authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-    projectId: "YOUR_PROJECT_ID",
-    storageBucket: "YOUR_PROJECT_ID.appspot.com",
-    messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-    appId: "YOUR_APP_ID"
+    apiKey: "AIzaSyDTOeU-9s8Ope48ce7QtcYKTYl0dwONZiQ",
+    authDomain: "tosha-lup.firebaseapp.com",
+    projectId: "tosha-lup",
+    storageBucket: "tosha-lup.firebasestorage.app",
+    messagingSenderId: "516568752534",
+    appId: "1:516568752534:web:02096798fe8d2c5bac3db7"
 };
 
 // Inisialisasi Firebase
