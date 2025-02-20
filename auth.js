@@ -123,7 +123,7 @@ window.submitForm = async () => {
                     typingTo: ""
                 });
 
-                window.location.href = "/users.html";
+                window.location.href = "users.html";
                 break;
 
             case 'login':
@@ -136,9 +136,9 @@ window.submitForm = async () => {
                 const userDoc = await getDoc(doc(db, "users", loginCredential.user.uid));
 
                 if (userDoc.data().isAdmin) {
-                    window.location.href = "/admin.html";
+                    window.location.href = "admin.html";
                 } else {
-                    window.location.href = "/users.html";
+                    window.location.href = "users.html";
                 }
                 break;
 
