@@ -298,7 +298,7 @@ document.querySelectorAll('.menu-item').forEach(item => {
 
 // Start chat with selected user
 window.startChat = (userId) => {
-    window.location.href = `/chat?user=${userId}`;
+    window.location.href = `chat?user=${userId}`;
 };
 
 // Logout functionality
