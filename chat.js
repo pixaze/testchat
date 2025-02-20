@@ -1,210 +1,317 @@
 import { auth, db, storage } from "./firebase-config.js";
-import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-auth.js";
-import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js";
+import { 
+    collection, 
+    query, 
+    orderBy, 
+    onSnapshot, 
+    addDoc, 
+    doc, 
+    getDoc,
+    serverTimestamp 
+} from "https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js";
 import { ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-storage.js";
 
-let currentUser;
+let selectedUserId = null;
+let mediaRecorder = null;
+let audioChunks = [];
+let isGeminiChat = false;
 
-// Cek status login
-onAuthStateChanged(auth, (user) => {
+// Initialize chat interface
+auth.onAuthStateChanged(async (user) => {
     if (user) {
-        currentUser = user;
-        loadUsers();
-        listenForMessages();
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        if (!userDoc.exists()) {
+            window.location.href = "/";
+            return;
+        }
+
+        // Get user ID from URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const userId = urlParams.get('user');
+        if (userId) {
+            const targetUserDoc = await getDoc(doc(db, "users", userId));
+            if (targetUserDoc.exists()) {
+                const targetUser = targetUserDoc.data();
+                startChat(userId, targetUser);
+            }
+        }
     } else {
-        window.location.href = "index.html";
+        window.location.href = "/";
     }
 });
 
-// Menampilkan daftar pengguna
-function loadUsers() {
-    const userList = document.getElementById("user-list");
-    userList.innerHTML = "";
-
-    onSnapshot(collection(db, "users"), (snapshot) => {
-        snapshot.forEach((doc) => {
-            const user = doc.data();
-            if (user.email !== currentUser.email) {
-                const div = document.createElement("div");
-                div.classList.add("user");
-                div.innerHTML = `
-                    <img src="${user.avatar}" width="40">
-                    <span>${user.username}</span>
-                    <span>${user.online ? "🟢 Online" : "⚪ Offline"}</span>
-                `;
-                div.onclick = () => startChat(doc.id, user.username);
-                userList.appendChild(div);
-            }
-        });
-    });
-}
-
-// Memulai obrolan
-let selectedUserId = null;
-function startChat(userId, username) {
+// Start chat with selected user
+function startChat(userId, userData) {
     selectedUserId = userId;
-    document.getElementById("chat-header").textContent = `Chat with ${username}`;
-    listenForMessages();
-}
+    isGeminiChat = userId === 'gemini';
 
-// Mengirim pesan teks
-async function sendMessage() {
-    const messageInput = document.getElementById("message");
-    const text = messageInput.value;
-    if (text.trim() === "" || !selectedUserId) return;
+    // Update header with user info
+    document.getElementById("recipient-avatar").src = isGeminiChat 
+        ? 'https://seeklogo.com/images/G/google-gemini-logo-6D598FC0E1-seeklogo.com.png' 
+        : userData.avatar;
+    document.getElementById("recipient-name").textContent = isGeminiChat 
+        ? 'SpovaAI' 
+        : userData.username;
 
-    await addDoc(collection(db, "messages"), {
-        sender: currentUser.uid,
-        receiver: selectedUserId,
-        text: text,
-        timestamp: serverTimestamp()
+    // Show appropriate badges
+    document.getElementById("veriduck-badge").style.display = userData.veriduck ? "inline-flex" : "none";
+    document.getElementById("verifiedvip-badge").style.display = userData.verifiedvip ? "inline-flex" : "none";
+    document.getElementById("verified-badge").style.display = userData.verified ? "inline-flex" : "none";
+    updateOnlineStatus(true);
+
+    // Listen for online status changes
+    onSnapshot(doc(db, "users", userId), (doc) => {
+        if (doc.exists()) {
+            updateOnlineStatus(doc.data().online);
+        }
     });
 
-    messageInput.value = "";
+    loadMessages();
+    setupMediaHandlers();
 }
 
-// Mendengarkan pesan
-function listenForMessages() {
-    if (!selectedUserId) return;
+// Update online status display
+function updateOnlineStatus(isOnline) {
+    const statusIcon = document.querySelector('.status-icon');
+    const statusText = document.querySelector('.status-text');
     
-    const messagesDiv = document.getElementById("messages");
-    messagesDiv.innerHTML = "";
+    if (statusIcon && statusText) {
+        statusIcon.style.color = isOnline ? 'var(--online)' : 'var(--offline)';
+        statusText.textContent = isOnline ? 'Online' : 'Offline';
+    }
+}
 
-    const q = query(collection(db, "messages"), orderBy("timestamp"));
+// Load and display messages
+function loadMessages() {
+    const messagesDiv = document.getElementById("messages");
+    const q = query(
+        collection(db, "messages"),
+        orderBy("timestamp")
+    );
+
+    // Mark messages as read
+    const markAsRead = async (messageDoc) => {
+        if (messageDoc.data().receiver === auth.currentUser.uid && !messageDoc.data().read) {
+            await updateDoc(doc(db, "messages", messageDoc.id), {
+                read: true
+            });
+        }
+    };
+
     onSnapshot(q, (snapshot) => {
+        messagesDiv.innerHTML = "";
         snapshot.forEach((doc) => {
             const msg = doc.data();
-            if ((msg.sender === currentUser.uid && msg.receiver === selectedUserId) ||
-                (msg.sender === selectedUserId && msg.receiver === currentUser.uid)) {
-                
-                const div = document.createElement("div");
-                div.classList.add("message", msg.sender === currentUser.uid ? "sent" : "received");
-                div.textContent = msg.text;
-                messagesDiv.appendChild(div);
+            if ((msg.sender === auth.currentUser.uid && msg.receiver === selectedUserId) ||
+                (msg.sender === selectedUserId && msg.receiver === auth.currentUser.uid)) {
+                displayMessage(msg);
             }
         });
-
         messagesDiv.scrollTop = messagesDiv.scrollHeight;
     });
 }
 
-// Upload file
-async function uploadFile() {
-    const fileInput = document.getElementById("fileInput");
-    const file = fileInput.files[0];
+// Display a message
+function displayMessage(msg) {
+    const messagesDiv = document.getElementById("messages");
+    const div = document.createElement("div");
+    div.className = `message ${msg.sender === auth.currentUser.uid ? "sent" : "received"}`;
 
-    if (!file || !selectedUserId) return;
+    if (msg.text) {
+        div.textContent = msg.text;
+    } else if (msg.image) {
+        div.innerHTML = `<img src="${msg.image}" alt="Image" style="max-width: 200px; border-radius: 8px;">`;
+    } else if (msg.file) {
+        div.innerHTML = `<a href="${msg.file}" target="_blank" style="color: inherit;"><i class="fas fa-file"></i> ${msg.fileName}</a>`;
+    } else if (msg.audio) {
+        div.innerHTML = `
+            <audio controls style="max-width: 200px;">
+                <source src="${msg.audio}" type="audio/webm">
+            </audio>`;
+    }
 
-    const storageRef = ref(storage, `uploads/${file.name}`);
-    await uploadBytes(storageRef, file);
-
-    const fileURL = await getDownloadURL(storageRef);
-    await addDoc(collection(db, "messages"), {
-        sender: currentUser.uid,
-        receiver: selectedUserId,
-        file: fileURL,
-        fileName: file.name,
-        timestamp: serverTimestamp()
-    });
-
-    alert("File berhasil dikirim!");
+    messagesDiv.appendChild(div);
 }
 
-import { auth, db } from "./firebase-config.js";
-import { doc, updateDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js";
+// Setup media handlers
+function setupMediaHandlers() {
+    // Voice recording
+    const voiceBtn = document.getElementById('voice-btn');
+    voiceBtn.addEventListener('mousedown', startRecording);
+    voiceBtn.addEventListener('mouseup', stopRecording);
+    voiceBtn.addEventListener('mouseleave', stopRecording);
 
-let typingTimeout;
+    // File upload
+    const fileInput = document.getElementById('file-input');
+    fileInput.addEventListener('change', handleFileUpload);
 
-// Fungsi untuk mendeteksi saat user mengetik
-function handleTyping() {
-    if (!selectedUserId) return;
-
-    const userDocRef = doc(db, "users", auth.currentUser.uid);
-    updateDoc(userDocRef, { typingTo: selectedUserId });
-
-    clearTimeout(typingTimeout);
-    typingTimeout = setTimeout(() => {
-        updateDoc(userDocRef, { typingTo: "" });
-    }, 2000);
+    // Image upload
+    const imageInput = document.getElementById('image-input');
+    imageInput.addEventListener('change', handleImageUpload);
 }
 
-// Menampilkan indikator mengetik
-function listenForTyping() {
-    const typingIndicator = document.getElementById("typing-indicator");
-
-    onSnapshot(doc(db, "users", selectedUserId), (doc) => {
-        const userData = doc.data();
-        if (userData.typingTo === auth.currentUser.uid) {
-            typingIndicator.innerText = "Sedang mengetik...";
-        } else {
-            typingIndicator.innerText = "";
-        }
-    });
-}
-
-// Panggil fungsi saat user mulai mengetik
-document.getElementById("message").addEventListener("input", handleTyping);
-
-import { storage } from "./firebase-config.js";
-import { ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-storage.js";
-
-let mediaRecorder;
-let audioChunks = [];
-const recordButton = document.getElementById("record-button");
-
-recordButton.addEventListener("mousedown", startRecording);
-recordButton.addEventListener("mouseup", stopRecording);
-
-function startRecording() {
-    navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
+// Voice recording functions
+async function startRecording() {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         mediaRecorder = new MediaRecorder(stream);
         mediaRecorder.start();
+        audioChunks = [];
 
-        mediaRecorder.ondataavailable = (event) => {
+        mediaRecorder.addEventListener("dataavailable", event => {
             audioChunks.push(event.data);
-        };
-    });
+        });
+
+        document.getElementById('voice-btn').style.color = 'var(--primary-color)';
+    } catch (error) {
+        console.error("Error starting recording:", error);
+    }
 }
 
-function stopRecording() {
-    mediaRecorder.stop();
-    mediaRecorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
-        const audioFile = new File([audioBlob], "voice-note.webm", { type: "audio/webm" });
+async function stopRecording() {
+    if (mediaRecorder && mediaRecorder.state === "recording") {
+        mediaRecorder.stop();
+        document.getElementById('voice-btn').style.color = 'var(--text-secondary)';
 
-        const storageRef = ref(storage, `voice_notes/${Date.now()}.webm`);
-        await uploadBytes(storageRef, audioFile);
-        const audioURL = await getDownloadURL(storageRef);
+        mediaRecorder.addEventListener("stop", async () => {
+            const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
+            const audioFile = new File([audioBlob], `voice-${Date.now()}.webm`);
+            await uploadMedia(audioFile, 'audio');
+        });
+    }
+}
 
-        await addDoc(collection(db, "messages"), {
+// File upload handler
+async function handleFileUpload(e) {
+    const file = e.target.files[0];
+    if (file) {
+        await uploadMedia(file, 'file');
+        e.target.value = '';
+    }
+}
+
+// Image upload handler
+async function handleImageUpload(e) {
+    const file = e.target.files[0];
+    if (file) {
+        await uploadMedia(file, 'image');
+        e.target.value = '';
+    }
+}
+
+// Generic media upload function
+async function uploadMedia(file, type) {
+    try {
+        const storageRef = ref(storage, `${type}s/${Date.now()}-${file.name}`);
+        await uploadBytes(storageRef, file);
+        const url = await getDownloadURL(storageRef);
+
+        const messageData = {
             sender: auth.currentUser.uid,
             receiver: selectedUserId,
-            voiceNote: audioURL,
             timestamp: serverTimestamp()
-        });
+        };
 
-        audioChunks = [];
-    };
+        if (type === 'audio') {
+            messageData.audio = url;
+        } else if (type === 'image') {
+            messageData.image = url;
+        } else {
+            messageData.file = url;
+            messageData.fileName = file.name;
+        }
+
+        await addDoc(collection(db, "messages"), messageData);
+    } catch (error) {
+        console.error(`Error uploading ${type}:`, error);
+    }
 }
 
-function loadUsers() {
-    const userList = document.getElementById("user-list");
-    userList.innerHTML = "";
+// Send text message
+window.sendMessage = async () => {
+    const messageInput = document.getElementById("message");
+    const text = messageInput.value.trim();
 
-    onSnapshot(collection(db, "users"), (snapshot) => {
-        snapshot.forEach((doc) => {
-            const user = doc.data();
-            if (user.email !== auth.currentUser.email) {
-                const div = document.createElement("div");
-                div.classList.add("user");
-                div.innerHTML = `
-                    <img src="${user.avatar}" width="40">
-                    <span>${user.username} ${user.verified ? "✔️" : ""}</span>
-                    <span>${user.online ? "🟢 Online" : "⚪ Offline"}</span>
-                `;
-                div.onclick = () => startChat(doc.id, user.username);
-                userList.appendChild(div);
+    if (text && (selectedUserId || isGeminiChat)) {
+        try {
+            if (isGeminiChat) {
+                // Display user message
+                displayMessage({
+                    sender: auth.currentUser.uid,
+                    text: text,
+                    timestamp: serverTimestamp()
+                });
+
+                // Show typing indicator
+                const typingDiv = document.createElement('div');
+                typingDiv.className = 'message received typing';
+                typingDiv.textContent = 'Gemini is typing...';
+                document.getElementById('messages').appendChild(typingDiv);
+
+                // Call Gemini API and display response
+                try {
+                    const response = await fetch('/gemini/chat', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ message: text })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+
+                    const data = await response.json();
+
+                    // Remove typing indicator
+                    document.querySelector('.typing')?.remove();
+
+                    if (data.error) {
+                        throw new Error(data.error);
+                    }
+
+                    // Display Gemini's response
+                    displayMessage({
+                        sender: 'gemini',
+                        text: data.response,
+                        timestamp: serverTimestamp()
+                    });
+                } catch (error) {
+                    console.error('Gemini API error:', error);
+                    document.querySelector('.typing')?.remove();
+                    displayMessage({
+                        sender: 'gemini',
+                        text: 'Sorry, I encountered an error. Please try again.',
+                        timestamp: serverTimestamp()
+                    });
+                }
+            } else {
+                await addDoc(collection(db, "messages"), {
+                    sender: auth.currentUser.uid,
+                    receiver: selectedUserId,
+                    text: text,
+                    timestamp: serverTimestamp()
+                });
             }
-        });
+            messageInput.value = "";
+        } catch (error) {
+            console.error("Error sending message:", error);
+        }
+    }
+};
+
+// Navigation
+window.closeChat = () => {
+    window.location.href = "/users";
+};
+
+// Add event listener for Enter key
+document.addEventListener('DOMContentLoaded', () => {
+    const messageInput = document.getElementById("message");
+    messageInput.addEventListener("keypress", (e) => {
+        if (e.key === "Enter") {
+            window.sendMessage();
+        }
     });
-}
+});

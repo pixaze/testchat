@@ -3,19 +3,69 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#2196f3">
     <title>Chat App - Login</title>
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body>
-    <div class="container">
-        <h2>Login / Signup</h2>
-        <input type="text" id="username" placeholder="Username">
-        <input type="email" id="email" placeholder="Email">
-        <input type="password" id="password" placeholder="Password">
-        <button onclick="signUp()">Sign Up</button>
-        <button onclick="login()">Login</button>
+    <div id="loading-screen">
+        <div class="loading-dots">
+            <div class="dot"></div>
+            <div class="dot"></div>
+            <div class="dot"></div>
+        </div>
     </div>
-    <script src="firebase-config.js"></script>
-    <script src="auth.js"></script>
+    <div class="auth-container" style="display: none;">
+        <div class="auth-card">
+            <div class="auth-header">
+                <i class="fas fa-comments auth-icon"></i>
+                <h2>Welcome</h2>
+                <p class="auth-subtitle">Sign in to continue chatting</p>
+            </div>
+            <div class="auth-form">
+                <div class="auth-toggle">
+                    <button onclick="toggleMode('login')" class="toggle-btn active" id="login-toggle">
+                        <i class="fas fa-sign-in-alt"></i> Login
+                    </button>
+                    <button onclick="toggleMode('signup')" class="toggle-btn" id="signup-toggle">
+                        <i class="fas fa-user-plus"></i> Sign Up
+                    </button>
+                    <button onclick="toggleMode('reset')" class="toggle-btn" id="reset-toggle">
+                        <i class="fas fa-key"></i> Reset
+                    </button>
+                </div>
+                <div id="username-group" class="input-group" style="display: none;">
+                    <i class="fas fa-user input-icon"></i>
+                    <input type="text" 
+                           id="username" 
+                           placeholder="Username" 
+                           autocomplete="username">
+                </div>
+                <div class="input-group">
+                    <i class="fas fa-envelope input-icon"></i>
+                    <input type="email" 
+                           id="email" 
+                           placeholder="Email" 
+                           required 
+                           autocomplete="email">
+                </div>
+                <div id="password-group" class="input-group">
+                    <i class="fas fa-lock input-icon"></i>
+                    <input type="password" 
+                           id="password" 
+                           placeholder="Password" 
+                           required 
+                           autocomplete="current-password">
+                </div>
+                <button onclick="submitForm()" id="submit-btn" class="primary-btn">
+                    <i class="fas fa-sign-in-alt"></i> Login
+                </button>
+                <div id="error-message" class="error-message" role="alert"></div>
+            </div>
+        </div>
+    </div>
+    <script type="module" src="firebase-config.js"></script>
+    <script type="module" src="auth.js"></script>
 </body>
 </html>

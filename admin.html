@@ -1,17 +1,24 @@
+
 <!DOCTYPE html>
-<html lang="id">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Panel</title>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js"></script>
-    <script src="firebase-config.js"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body>
-    <h2>Admin Panel - Verifikasi User</h2>
-    <div id="user-list"></div>
-    <script src="admin.js"></script>
+    <div class="admin-container">
+        <h2>Admin Panel - User Management</h2>
+        <div id="user-list" class="admin-user-list"></div>
+        <div class="admin-buttons">
+            <button onclick="window.location.href='/users'" class="nav-btn">
+                <i class="fas fa-users"></i> Users
+            </button>
+            <button onclick="logout()" class="logout-btn">Logout</button>
+        </div>
+    </div>
+    <script type="module" src="{{ url_for('static', filename='js/firebase-config.js') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='js/admin.js') }}"></script>
 </body>
 </html>

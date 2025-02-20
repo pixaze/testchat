@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#2196f3">
+    <title>Feed - Social Chat</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .post {
+            background: var(--surface-color);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 16px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: transform 0.2s;
+        }
+
+        .post:hover {
+            transform: translateY(-2px);
+        }
+
+        .post-image {
+            width: 100%;
+            max-height: 400px;
+            object-fit: cover;
+            border-radius: 8px;
+            margin: 8px 0;
+        }
+
+        .comments-section {
+            margin-top: 12px;
+            border-top: 1px solid var(--border-color);
+            padding-top: 12px;
+        }
+
+        .comment {
+            display: flex;
+            align-items: start;
+            margin-bottom: 12px;
+            padding: 8px;
+            background: var(--background-color);
+            border-radius: 8px;
+        }
+
+        .comment-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .comment-content {
+            flex: 1;
+        }
+
+        .comment-username {
+            font-weight: bold;
+            margin-right: 8px;
+        }
+
+        .comment-timestamp {
+            font-size: 0.8em;
+            color: var(--text-secondary);
+        }
+
+        .comment-input-container {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .comment-input {
+            flex: 1;
+            padding: 8px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            background: var(--background-color);
+            color: var(--text-primary);
+        }
+
+        .send-comment-btn {
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .send-comment-btn:hover {
+            background: var(--primary-dark);
+        }
+
+        .liked {
+            color: #e91e63;
+        }
+
+        @media (max-width: 768px) {
+            .post {
+                margin: 8px;
+                padding: 12px;
+            }
+
+            .post-image {
+                max-height: 300px;
+            }
+        }
+    </style>
+</head>
+<body data-theme="system">
+    <div class="feed-container">
+        <div class="feed-header">
+            <button onclick="window.location.href='/users'" class="back-btn">
+                <i class="fas fa-arrow-left"></i>
+            </button>
+            <h2>Social Feed</h2>
+        </div>
+
+        <!-- Post Creation Form -->
+        <div class="post-composer" id="post-composer">
+            <form id="post-form" class="post-form">
+                <div class="post-input-wrapper">
+                    <textarea id="post-content" 
+                             placeholder="What's on your mind?" 
+                             maxlength="280"
+                             class="post-input"></textarea>
+                    <div class="post-media">
+                        <label for="post-image" class="media-upload-btn">
+                            <i class="fas fa-image"></i>
+                            <span>Add Photo</span>
+                            <input type="file" id="post-image" accept="image/*" hidden>
+                        </label>
+                        <div id="image-preview"></div>
+                    </div>
+                    <div class="post-actions">
+                        <span id="char-count">280</span>
+                        <button type="submit" class="post-btn" id="submit-post">
+                            <i class="fas fa-paper-plane"></i> Post
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <!-- Posts Feed -->
+        <div id="posts-container" class="posts-container">
+            <!-- Posts will be loaded here dynamically -->
+        </div>
+
+        <!-- Navigation Bar -->
+        <nav class="navigation-bar">
+            <button onclick="window.location.href='/users'" class="nav-btn">
+                <i class="fas fa-comments"></i> Chats
+            </button>
+            <button onclick="window.location.href='/feed'" class="nav-btn active">
+                <i class="fas fa-stream"></i> Feed
+            </button>
+            <button onclick="window.location.href='/settings'" class="nav-btn">
+                <i class="fas fa-cog"></i> Settings
+            </button>
+        </nav>
+    </div>
+
+    <script type="module" src="firebase-config.js"></script>
+    <script type="module" src="feed.js"></script>
+</body>
+</html>
