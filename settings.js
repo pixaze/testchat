@@ -15,7 +15,7 @@ auth.onAuthStateChanged(async (user) => {
     if (user) {
         const userDoc = await getDoc(doc(db, "users", user.uid));
         if (!userDoc.exists()) {
-            window.location.href = "/";
+            window.location.href = "users.html";
             return;
         }
 
