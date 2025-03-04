@@ -50,7 +50,7 @@ auth.onAuthStateChanged(async (user) => {
         document.getElementById("show-read-receipts").checked = userData.privacy?.showReadReceipts || false;
         document.getElementById("private-account").checked = userData.privacy?.privateAccount || false;
     } else {
-        window.location.href = "/";
+        window.location.href = "users.html";
     }
 });
 
@@ -251,7 +251,7 @@ window.deleteAccount = async () => {
 
         // Sign out
         await auth.signOut();
-        window.location.href = "/";
+        window.location.href = "users.html";
 
         showNotification("Account deletion request submitted. You will be signed out now.");
     } catch (error) {
