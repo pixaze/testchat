@@ -292,7 +292,7 @@ document.getElementById("font-size").addEventListener('change', (e) => {
 window.logout = async () => {
     try {
         await auth.signOut();
-        window.location.href = "/";
+        window.location.href = "users.html";
     } catch (error) {
         console.error("Error signing out:", error);
         showNotification("Error signing out", true);
