@@ -303,7 +303,7 @@ window.sendMessage = async () => {
 
 // Navigation
 window.closeChat = () => {
-    window.location.href = "/users";
+    window.location.href = "users.html";
 };
 
 // Add event listener for Enter key
