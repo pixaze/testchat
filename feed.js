@@ -176,7 +176,7 @@ async function displayPosts(posts) {
                 }
             });
 
-            // Real-time like and comment updates
+            // Real-time like and comment count updates
             const postRef = doc(db, "posts", post.id);
             onSnapshot(postRef, (doc) => {
                 const updatedData = doc.data();
@@ -210,7 +210,8 @@ async function displayPosts(posts) {
                 orderBy("createdAt", "desc")
             );
             onSnapshot(commentsQuery, (snapshot) => {
-                const commentsSection = postElement.querySelector(`#comments-${post.id}`);
+                console.log(`Comments updated for post ${post.id}:`, snapshot.docs.length); // Debugging
+                const commentsSection = document.getElementById(`comments-${post.id}`);
                 if (commentsSection) {
                     const existingComments = commentsSection.querySelectorAll('.comment');
                     existingComments.forEach(comment => comment.remove());
@@ -236,7 +237,11 @@ async function displayPosts(posts) {
                         `;
                         commentsSection.insertBefore(commentElement, commentInputContainer);
                     });
+                } else {
+                    console.error(`Comments section not found for post ${post.id}`);
                 }
+            }, (error) => {
+                console.error(`Error in comments listener for post ${post.id}:`, error);
             });
 
             postsContainer.appendChild(postElement);
@@ -256,6 +261,7 @@ async function fetchComments(postId) {
             orderBy("createdAt", "desc")
         );
         const commentsSnapshot = await getDocs(q);
+        console.log(`Initial comments for post ${postId}:`, commentsSnapshot.docs.length); // Debugging
         return commentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     } catch (error) {
         console.error("Error fetching comments:", error);
@@ -339,14 +345,14 @@ async function handleComment(postId, content) {
         // Tambahkan komentar ke koleksi comments
         const commentDocRef = await addDoc(collection(db, "comments"), comment);
 
-        // Perbarui dokumen postingan dengan ID komentar dan jumlah komentar
+        // Perbarui dokumen postingan
         const postRef = doc(db, "posts", postId);
         const postDoc = await getDoc(postRef);
         const currentCommentCount = postDoc.data().commentCount || 0;
 
         await updateDoc(postRef, {
-            comments: arrayUnion(commentDocRef.id), // Tambahkan ID komentar ke array comments
-            commentCount: currentCommentCount + 1 // Tambah jumlah komentar
+            comments: arrayUnion(commentDocRef.id),
+            commentCount: currentCommentCount + 1
         });
 
         showNotification("Comment added successfully");
@@ -500,8 +506,8 @@ async function createPost(content, imageUrl = null) {
             imageUrl,
             createdAt: serverTimestamp(),
             reactions: { like: [] },
-            comments: [], // Array untuk menyimpan ID komentar
-            commentCount: 0 // Jumlah komentar awal
+            comments: [],
+            commentCount: 0
         });
     } catch (error) {
         console.error("Error creating post:", error);
