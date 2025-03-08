@@ -5,103 +5,141 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Tic-Tac-Toe with Firebase</title>
   <style>
-  * {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-  font-family: Arial, sans-serif;
-}
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: Arial, sans-serif;
+    }
 
-body {
-  background-color: #f0f0f0;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 100vh;
-}
+    body {
+      background-color: #1a1a1a;
+      color: #fff;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
 
-.container {
-  text-align: center;
-  background-color: #fff;
-  padding: 20px;
-  border-radius: 10px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-}
+    .container {
+      background-color: #2c2c2c;
+      padding: 20px;
+      border-radius: 10px;
+      width: 400px;
+      text-align: center;
+      box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+    }
 
-h1 {
-  color: #333;
-  margin-bottom: 20px;
-}
+    h1 {
+      color: #fff;
+      margin-bottom: 20px;
+    }
 
-.game-controls {
-  margin-bottom: 20px;
-}
+    .game-controls {
+      margin-bottom: 20px;
+    }
 
-button {
-  padding: 10px 20px;
-  margin: 0 10px;
-  background-color: #007bff;
-  color: #fff;
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
-  transition: background-color 0.3s;
-}
+    button {
+      padding: 10px 20px;
+      background-color: #ff4444;
+      color: #fff;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: background-color 0.3s;
+    }
 
-button:hover {
-  background-color: #0056b3;
-}
+    button:hover {
+      background-color: #cc3333;
+    }
 
-.status {
-  margin-bottom: 20px;
-  color: #555;
-  font-size: 1.1em;
-}
+    input[type="text"] {
+      padding: 10px;
+      margin: 10px 0;
+      border: 1px solid #555;
+      border-radius: 5px;
+      background-color: #333;
+      color: #fff;
+      width: 80%;
+    }
 
-.board {
-  display: grid;
-  grid-template-columns: repeat(3, 100px);
-  grid-gap: 5px;
-  width: 310px;
-  margin: 0 auto;
-}
+    .status {
+      margin-bottom: 20px;
+      color: #ccc;
+      font-size: 1.1em;
+    }
 
-.board div {
-  width: 100px;
-  height: 100px;
-  background-color: #f8f9fa;
-  border: 2px solid #ccc;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  font-size: 2em;
-  color: #333;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
+    .players {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
 
-.board div:hover {
-  background-color: #e9ecef;
-}
+    .player {
+      display: flex;
+      align-items: center;
+    }
 
-.board div.x {
-  color: #dc3545;
-}
+    .player img {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      margin-right: 10px;
+    }
 
-.board div.o {
-  color: #28a745;
-}
+    .player span {
+      color: #fff;
+      font-size: 1em;
+    }
 
-</style>
+    .board {
+      display: grid;
+      grid-template-columns: repeat(3, 100px);
+      grid-gap: 5px;
+      width: 310px;
+      margin: 0 auto;
+    }
+
+    .board div {
+      width: 100px;
+      height: 100px;
+      background-color: #333;
+      border: 2px solid #555;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 2em;
+      color: #fff;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+
+    .board div:hover {
+      background-color: #444;
+    }
+
+    .board div.x {
+      color: #ff4444;
+    }
+
+    .board div.o {
+      color: #44ff44;
+    }
+  </style>
 </head>
 <body>
   <div class="container">
     <h1>Tic-Tac-Toe</h1>
     <div class="game-controls">
-      <button id="create-game">Create Game</button>
-      <button id="join-game">Join Game</button>
+      <button id="create-game">Create Room</button>
+      <button id="join-game">Join Room</button>
+      <input type="text" id="room-code" placeholder="Enter room code">
     </div>
-    <div id="game-status" class="status">Please create or join a game.</div>
+    <div id="game-status" class="status">Create or join a room to start.</div>
+    <div id="players" class="players">
+      <div id="player-self" class="player"></div>
+      <div id="player-opponent" class="player"></div>
+    </div>
     <div id="board" class="board"></div>
   </div>
   <script type="module" src="tictactoe.js"></script>
