@@ -18,9 +18,9 @@
             --border-color: #e0e0e0;
             --shadow-color: rgba(0, 0, 0, 0.1);
             --hover-color: #f0f4f8;
+            --like-color: #e91e63;
         }
 
-        /* Tema gelap hanya jika sistem mendukung */
         @media (prefers-color-scheme: dark) {
             [data-theme="system"] {
                 --primary-color: #42a5f5;
@@ -32,6 +32,7 @@
                 --border-color: #404040;
                 --shadow-color: rgba(0, 0, 0, 0.3);
                 --hover-color: #333333;
+                --like-color: #ff4081;
             }
         }
 
@@ -161,10 +162,10 @@
 
         #image-preview {
             max-width: 100%;
-            max-height: 300px; /* Batas tinggi untuk pratinjau */
+            max-height: 300px;
             border-radius: 8px;
             overflow: hidden;
-            object-fit: contain; /* Memastikan gambar/video tidak terdistorsi */
+            object-fit: contain;
         }
 
         .post-actions {
@@ -214,10 +215,40 @@
             box-shadow: 0 5px 15px var(--shadow-color);
         }
 
+        .post-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .post-avatar {
+            width: 32px; /* Ukuran foto profil diperkecil */
+            height: 32px;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+
+        .post-meta {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .post-username {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .post-timestamp {
+            font-size: 0.85em;
+            color: var(--text-secondary);
+        }
+
         .post-image {
             width: 100%;
-            max-height: 400px; /* Batas tinggi untuk gambar/video */
-            object-fit: contain; /* Memastikan tidak melebihi ukuran */
+            max-height: 400px;
+            object-fit: contain;
             border-radius: 8px;
             margin: 10px 0;
             transition: opacity 0.3s ease;
@@ -225,6 +256,35 @@
 
         .post-image:hover {
             opacity: 0.9;
+        }
+
+        .post-actions-buttons {
+            display: flex;
+            gap: 15px;
+            margin-top: 10px;
+        }
+
+        .like-btn, .comment-btn {
+            background: none;
+            border: 1px solid var(--border-color);
+            padding: 6px 12px;
+            border-radius: 20px;
+            color: var(--text-primary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            transition: all 0.2s ease;
+        }
+
+        .like-btn:hover, .comment-btn:hover {
+            background: var(--hover-color);
+            border-color: var(--primary-color);
+        }
+
+        .like-btn.liked {
+            color: var(--like-color);
+            border-color: var(--like-color);
         }
 
         /* Comments Section */
@@ -249,8 +309,8 @@
         }
 
         .comment-avatar {
-            width: 36px;
-            height: 36px;
+            width: 28px; /* Ukuran foto profil diperkecil */
+            height: 28px;
             border-radius: 50%;
             margin-right: 10px;
             object-fit: cover;
@@ -311,11 +371,6 @@
             background: var(--primary-dark);
         }
 
-        .liked {
-            color: #e91e63;
-            transition: color 0.2s;
-        }
-
         /* Navigation Bar */
         .navigation-bar {
             display: flex;
@@ -349,6 +404,34 @@
             font-weight: bold;
         }
 
+        /* Notification */
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            border-radius: 8px;
+            color: white;
+            font-size: 0.95em;
+            z-index: 1000;
+            opacity: 0;
+            transform: translateY(-20px);
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+
+        .notification.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .notification.success {
+            background: #4caf50;
+        }
+
+        .notification.error {
+            background: #f44336;
+        }
+
         /* Responsive Design */
         @media (max-width: 768px) {
             .feed-container {
@@ -365,7 +448,7 @@
             }
 
             .post-image {
-                max-height: 300px; /* Batas lebih kecil untuk layar sedang */
+                max-height: 300px;
             }
 
             .navigation-bar {
@@ -383,9 +466,9 @@
                 font-size: 0.9em;
             }
 
-            .comment-avatar {
-                width: 30px;
-                height: 30px;
+            .comment-avatar, .post-avatar {
+                width: 24px;
+                height: 24px;
             }
 
             .send-comment-btn {
@@ -394,7 +477,7 @@
             }
 
             .post-image {
-                max-height: 250px; /* Batas lebih kecil untuk layar kecil */
+                max-height: 250px;
             }
         }
     </style>
@@ -451,10 +534,173 @@
                 <i class="fas fa-cog"></i> Settings
             </button>
         </nav>
+
+        <!-- Notification Container -->
+        <div id="notification" class="notification"></div>
     </div>
 
     <script type="module" src="firebase-config.js"></script>
     <script type="module" src="feed.js"></script>
+    <script>
+        // Contoh sederhana untuk menangani postingan dan komentar
+        const postsContainer = document.getElementById('posts-container');
+        const postForm = document.getElementById('post-form');
+        const postContent = document.getElementById('post-content');
+        const postImage = document.getElementById('post-image');
+        const imagePreview = document.getElementById('image-preview');
+        const charCount = document.getElementById('char-count');
+        const notification = document.getElementById('notification');
+
+        // Update character count
+        postContent.addEventListener('input', () => {
+            const remaining = 280 - postContent.value.length;
+            charCount.textContent = remaining;
+        });
+
+        // Preview image
+        postImage.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    imagePreview.innerHTML = `<img src="${reader.result}" alt="Preview">`;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // Load posts and comments from localStorage
+        function loadPosts() {
+            const posts = JSON.parse(localStorage.getItem('posts')) || [];
+            postsContainer.innerHTML = '';
+            posts.forEach(post => {
+                const postElement = createPostElement(post);
+                postsContainer.appendChild(postElement);
+            });
+        }
+
+        // Create post element
+        function createPostElement(post) {
+            const postDiv = document.createElement('div');
+            postDiv.className = 'post';
+            postDiv.innerHTML = `
+                <div class="post-header">
+                    <img src="https://via.placeholder.com/32" class="post-avatar" alt="User Avatar">
+                    <div class="post-meta">
+                        <span class="post-username">${post.username}</span>
+                        <span class="post-timestamp">${post.timestamp}</span>
+                    </div>
+                </div>
+                <p>${post.content}</p>
+                ${post.image ? `<img src="${post.image}" class="post-image" alt="Post Image">` : ''}
+                <div class="post-actions-buttons">
+                    <button class="like-btn" data-liked="false"><i class="far fa-heart"></i> Like</button>
+                    <button class="comment-btn"><i class="far fa-comment"></i> Comment</button>
+                </div>
+                <div class="comments-section" id="comments-${post.id}">
+                    ${post.comments.map(comment => `
+                        <div class="comment">
+                            <img src="https://via.placeholder.com/28" class="comment-avatar" alt="Comment Avatar">
+                            <div class="comment-content">
+                                <span class="comment-username">${comment.username}</span>
+                                <span class="comment-timestamp">${comment.timestamp}</span>
+                                <p>${comment.content}</p>
+                            </div>
+                        </div>
+                    `).join('')}
+                    <div class="comment-input-container">
+                        <input type="text" class="comment-input" placeholder="Write a comment...">
+                        <button class="send-comment-btn"><i class="fas fa-paper-plane"></i></button>
+                    </div>
+                </div>
+            `;
+
+            // Like button functionality
+            const likeBtn = postDiv.querySelector('.like-btn');
+            likeBtn.addEventListener('click', () => {
+                const isLiked = likeBtn.dataset.liked === 'true';
+                likeBtn.dataset.liked = !isLiked;
+                likeBtn.classList.toggle('liked');
+                likeBtn.querySelector('i').classList.toggle('far');
+                likeBtn.querySelector('i').classList.toggle('fas');
+            });
+
+            // Comment button functionality
+            const commentBtn = postDiv.querySelector('.comment-btn');
+            commentBtn.addEventListener('click', () => {
+                const commentSection = postDiv.querySelector('.comments-section');
+                commentSection.scrollIntoView({ behavior: 'smooth' });
+            });
+
+            // Add comment functionality
+            const commentInput = postDiv.querySelector('.comment-input');
+            const sendCommentBtn = postDiv.querySelector('.send-comment-btn');
+            sendCommentBtn.addEventListener('click', () => {
+                if (commentInput.value.trim()) {
+                    addComment(post.id, commentInput.value);
+                    commentInput.value = '';
+                }
+            });
+
+            return postDiv;
+        }
+
+        // Add comment
+        function addComment(postId, content) {
+            const posts = JSON.parse(localStorage.getItem('posts')) || [];
+            const post = posts.find(p => p.id === postId);
+            if (post) {
+                post.comments.push({
+                    username: 'You',
+                    timestamp: new Date().toLocaleString(),
+                    content: content
+                });
+                localStorage.setItem('posts', JSON.stringify(posts));
+                loadPosts();
+            }
+        }
+
+        // Handle post submission
+        postForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const content = postContent.value.trim();
+            if (!content) {
+                showNotification('Please write something!', 'error');
+                return;
+            }
+
+            const posts = JSON.parse(localStorage.getItem('posts')) || [];
+            const newPost = {
+                id: Date.now(),
+                username: 'You',
+                timestamp: new Date().toLocaleString(),
+                content: content,
+                image: imagePreview.querySelector('img')?.src || '',
+                comments: []
+            };
+
+            posts.unshift(newPost);
+            localStorage.setItem('posts', JSON.stringify(posts));
+            postContent.value = '';
+            imagePreview.innerHTML = '';
+            charCount.textContent = '280';
+            loadPosts();
+            showNotification('Post uploaded successfully!', 'success');
+        });
+
+        // Show notification
+        function showNotification(message, type) {
+            notification.textContent = message;
+            notification.className = `notification ${type}`;
+            notification.classList.add('show');
+            setTimeout(() => {
+                notification.classList.remove('show');
+            }, 3000);
+        }
+
+        // Initial load
+        loadPosts();
+    </script>
     <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'91d098534f5b0711',t:'MTc0MTQxODY4OC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script>
 </body>
 </html>
