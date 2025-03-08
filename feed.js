@@ -60,7 +60,7 @@ async function loadInitialPosts() {
             setLoadingState(false);
         });
     } catch (error) {
-        console.error("Error initializingProceeding initializing posts listener:", error);
+        console.error("Error initializing posts listener:", error);
         showNotification("Error initializing feed. Please try again.", true);
         setLoadingState(false);
     }
@@ -108,19 +108,17 @@ async function displayPosts(posts) {
 
             postElement.innerHTML = `
                 <div class="post-header">
-                    <div class="user-info">
-                        <div class="user-avatar">
-                            <img src="${postData.userAvatar}" alt="User Avatar" class="avatar">
-                            <span class="status-indicator ${postData.online ? 'online' : 'offline'}"></span>
+                    <div class="user-avatar">
+                        <img src="${postData.userAvatar}" alt="User Avatar" class="avatar">
+                        <span class="status-indicator ${postData.online ? 'online' : 'offline'}"></span>
+                    </div>
+                    <div class="user-details">
+                        <div class="username-container">
+                            <span class="username">${postData.userName}</span>
+                            ${postData.verifiedvip ? `<span class="verified-badge"><svg id="verifiedvip" width="16" height="16" viewBox="0 0 40 40"><defs><linearGradient id="gold-gradient" x1="4" y1="2" x2="36" y2="38"><stop offset="0%" stop-color="#f4e72a"/><stop offset="50%" stop-color="#cd8105"/><stop offset="100%" stop-color="#f4e72a"/></linearGradient></defs><path d="M19.998 3.094 14.638 0l-2.972 5.15H5.432v6.354L0 14.64 3.094 20 0 25.359l5.432 3.137v5.905h5.975L14.638 40l5.36-3.094L25.358 40l3.232-5.6h6.162v-6.01L40 25.359 36.905 20 40 14.641l-5.248-3.03v-6.46h-6.419L25.358 0l-5.36 3.094Z" fill="url(#gold-gradient)"/><path d="M27.413 14.319l2.254 2.287-11.43 11.5-6.835-6.93 2.244-2.258 4.587 4.581 9.18-9.18Z" fill="black"/></svg></span>` : 
+                            postData.verified ? `<span class="verified-badge"><svg id="verified" width="16" height="16" viewBox="0 0 40 40"><path d="M19.998 3.094 14.638 0l-2.972 5.15H5.432v6.354L0 14.64 3.094 20 0 25.359l5.432 3.137v5.905h5.975L14.638 40l5.36-3.094L25.358 40l3.232-5.6h6.162v-6.01L40 25.359 36.905 20 40 14.641l-5.248-3.03v-6.46h-6.419L25.358 0l-5.36 3.094Z" fill="currentColor"/><path d="M27.413 14.319l2.254 2.287-11.43 11.5-6.835-6.93 2.244-2.258 4.587 4.581 9.18-9.18Z" fill="white"/></svg></span>` : ''}
                         </div>
-                        <div class="user-details">
-                            <div class="username-container">
-                                <span class="username">${postData.userName}</span>
-                                ${postData.verifiedvip ? `<span class="verified-badge"><svg id="verifiedvip" width="16" height="16" viewBox="0 0 40 40"><defs><linearGradient id="gold-gradient" x1="4" y1="2" x2="36" y2="38"><stop offset="0%" stop-color="#f4e72a"/><stop offset="50%" stop-color="#cd8105"/><stop offset="100%" stop-color="#f4e72a"/></linearGradient></defs><path d="M19.998 3.094 14.638 0l-2.972 5.15H5.432v6.354L0 14.64 3.094 20 0 25.359l5.432 3.137v5.905h5.975L14.638 40l5.36-3.094L25.358 40l3.232-5.6h6.162v-6.01L40 25.359 36.905 20 40 14.641l-5.248-3.03v-6.46h-6.419L25.358 0l-5.36 3.094Z" fill="url(#gold-gradient)"/><path d="M27.413 14.319l2.254 2.287-11.43 11.5-6.835-6.93 2.244-2.258 4.587 4.581 9.18-9.18Z" fill="black"/></svg></span>` : 
-                                postData.verified ? `<span class="verified-badge"><svg id="verified" width="16" height="16" viewBox="0 0 40 40"><path d="M19.998 3.094 14.638 0l-2.972 5.15H5.432v6.354L0 14.64 3.094 20 0 25.359l5.432 3.137v5.905h5.975L14.638 40l5.36-3.094L25.358 40l3.232-5.6h6.162v-6.01L40 25.359 36.905 20 40 14.641l-5.248-3.03v-6.46h-6.419L25.358 0l-5.36 3.094Z" fill="currentColor"/><path d="M27.413 14.319l2.254 2.287-11.43 11.5-6.835-6.93 2.244-2.258 4.587 4.581 9.18-9.18Z" fill="white"/></svg></span>` : ''}
-                            </div>
-                            <span class="timestamp">${formatTimestamp(postData.createdAt)}</span>
-                        </div>
+                        <span class="timestamp">${formatTimestamp(postData.createdAt)}</span>
                     </div>
                 </div>
                 <div class="post-content">${postData.content}</div>
@@ -136,7 +134,7 @@ async function displayPosts(posts) {
                     </button>
                 </div>
                 <div class="comments-section" id="comments-${post.id}" style="display: none;"></div>
-                <div class="comment-input-container">
+                <div class="comment-input-container" id="comment-input-${post.id}" style="display: none;">
                     <input type="text" class="comment-input" placeholder="Write a comment...">
                     <button class="send-comment-btn" data-post-id="${post.id}">
                         <i class="fas fa-paper-plane"></i>
@@ -158,8 +156,7 @@ async function displayPosts(posts) {
                 if (content) {
                     handleComment(post.id, content);
                     commentInput.value = '';
-                    // Tampilkan komentar setelah menambah komentar baru
-                    toggleComments(post.id, true);
+                    toggleComments(post.id, true); // Pastikan komentar tetap terlihat setelah dikirim
                 }
             });
 
@@ -199,19 +196,20 @@ async function displayPosts(posts) {
 // Toggle Comments Visibility and Load Comments
 async function toggleComments(postId, forceShow = false) {
     const commentsSection = document.getElementById(`comments-${postId}`);
-    if (!commentsSection) {
-        console.error(`Comments section not found for post ${postId}`);
+    const commentInputContainer = document.getElementById(`comment-input-${postId}`);
+    if (!commentsSection || !commentInputContainer) {
+        console.error(`Comments section or input not found for post ${postId}`);
         return;
     }
 
     const isVisible = commentsSection.style.display === 'block';
     if (forceShow || !isVisible) {
         commentsSection.style.display = 'block';
-        // Load and display comments
+        commentInputContainer.style.display = 'flex'; // Tampilkan input bersama komentar
         const commentsQuery = query(
             collection(db, "comments"),
             where("postId", "==", postId),
-            orderBy("createdAt", "asc") // Terbaru di bawah
+            orderBy("createdAt", "asc") // Urutan bawah ke atas (terbaru di bawah)
         );
         onSnapshot(commentsQuery, (snapshot) => {
             commentsSection.innerHTML = snapshot.docs.map(doc => {
@@ -233,11 +231,14 @@ async function toggleComments(postId, forceShow = false) {
                     </div>
                 `;
             }).join('');
+            // Gulir otomatis ke bawah setelah komentar dimuat
+            commentsSection.scrollTop = commentsSection.scrollHeight;
         }, (error) => {
             console.error(`Error loading comments for post ${postId}:`, error);
         });
     } else {
         commentsSection.style.display = 'none';
+        commentInputContainer.style.display = 'none'; // Sembunyikan input bersama komentar
     }
 }
 
@@ -453,7 +454,13 @@ function showNotification(message, isError = false) {
     notification.className = `notification ${isError ? "error" : "success"}`;
     notification.textContent = message;
     document.body.appendChild(notification);
-    setTimeout(() => notification.remove(), 3000);
+    notification.style.opacity = '1';
+    notification.style.transform = 'translateY(0)';
+    setTimeout(() => {
+        notification.style.opacity = '0';
+        notification.style.transform = 'translateY(-20px)';
+        setTimeout(() => notification.remove(), 300);
+    }, 3000);
 }
 
 // Create Post in Firestore
