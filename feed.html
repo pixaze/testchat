@@ -222,27 +222,75 @@
             margin-bottom: 10px;
         }
 
-        .post-avatar {
-            width: 32px; /* Ukuran foto profil diperkecil */
-            height: 32px;
+        .user-avatar {
+            position: relative;
+            width: 40px; /* Ukuran avatar 40px */
+            height: 40px;
+        }
+
+        .avatar {
+            width: 100%;
+            height: 100%;
             border-radius: 50%;
             object-fit: cover;
         }
 
-        .post-meta {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
+        .status-indicator {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            border: 2px solid var(--surface-color);
         }
 
-        .post-username {
+        .status-indicator.online {
+            background: #4caf50;
+        }
+
+        .status-indicator.offline {
+            background: #cccccc;
+        }
+
+        .user-details {
+            flex: 1;
+        }
+
+        .username-container {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .username {
             font-weight: 600;
             color: var(--text-primary);
         }
 
-        .post-timestamp {
+        .verified-badge {
+            display: inline-flex;
+            align-items: center;
+        }
+
+        .verified-badge svg {
+            width: 16px;
+            height: 16px;
+            fill: var(--primary-color);
+        }
+
+        #verifiedvip {
+            width: 16px;
+            height: 16px;
+        }
+
+        .timestamp {
             font-size: 0.85em;
             color: var(--text-secondary);
+        }
+
+        .post-content {
+            margin-bottom: 10px;
         }
 
         .post-image {
@@ -258,13 +306,13 @@
             opacity: 0.9;
         }
 
-        .post-actions-buttons {
+        .post-actions {
             display: flex;
             gap: 15px;
             margin-top: 10px;
         }
 
-        .like-btn, .comment-btn {
+        .reaction-btn {
             background: none;
             border: 1px solid var(--border-color);
             padding: 6px 12px;
@@ -277,14 +325,18 @@
             transition: all 0.2s ease;
         }
 
-        .like-btn:hover, .comment-btn:hover {
+        .reaction-btn:hover {
             background: var(--hover-color);
             border-color: var(--primary-color);
         }
 
-        .like-btn.liked {
+        .reaction-btn.liked {
             color: var(--like-color);
             border-color: var(--like-color);
+        }
+
+        .count {
+            font-size: 0.9em;
         }
 
         /* Comments Section */
@@ -308,22 +360,13 @@
             background: var(--hover-color);
         }
 
-        .comment-avatar {
-            width: 28px; /* Ukuran foto profil diperkecil */
-            height: 28px;
-            border-radius: 50%;
-            margin-right: 10px;
-            object-fit: cover;
+        .comment .user-avatar {
+            width: 40px; /* Ukuran avatar komentar 40px */
+            height: 40px;
         }
 
         .comment-content {
             flex: 1;
-        }
-
-        .comment-username {
-            font-weight: 600;
-            margin-right: 8px;
-            color: var(--text-primary);
         }
 
         .comment-timestamp {
@@ -419,17 +462,33 @@
             transition: opacity 0.3s ease, transform 0.3s ease;
         }
 
-        .notification.show {
-            opacity: 1;
-            transform: translateY(0);
-        }
-
         .notification.success {
             background: #4caf50;
         }
 
         .notification.error {
             background: #f44336;
+        }
+
+        /* Loading Indicator */
+        .loading-indicator {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 10px 20px;
+            background: var(--surface-color);
+            border-radius: 20px;
+            box-shadow: 0 2px 10px var(--shadow-color);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .no-posts {
+            text-align: center;
+            color: var(--text-secondary);
+            padding: 20px;
         }
 
         /* Responsive Design */
@@ -466,9 +525,9 @@
                 font-size: 0.9em;
             }
 
-            .comment-avatar, .post-avatar {
-                width: 24px;
-                height: 24px;
+            .user-avatar {
+                width: 32px; /* Sesuaikan sedikit untuk layar kecil */
+                height: 32px;
             }
 
             .send-comment-btn {
@@ -485,7 +544,7 @@
 <body data-theme="system">
     <div class="feed-container">
         <div class="feed-header">
-            <button onclick="window.location.href='users.html'" class="back-btn">
+            <button class="back-btn">
                 <i class="fas fa-arrow-left"></i>
             </button>
             <h2>Social Feed</h2>
@@ -524,183 +583,19 @@
 
         <!-- Navigation Bar -->
         <nav class="navigation-bar">
-            <button onclick="window.location.href='users.html'" class="nav-btn">
+            <button class="nav-btn" data-href="users.html">
                 <i class="fas fa-comments"></i> Chats
             </button>
-            <button onclick="window.location.href='feed.html'" class="nav-btn active">
+            <button class="nav-btn active" data-href="feed.html">
                 <i class="fas fa-stream"></i> Feed
             </button>
-            <button onclick="window.location.href='settings.html'" class="nav-btn">
+            <button class="nav-btn" data-href="settings.html">
                 <i class="fas fa-cog"></i> Settings
             </button>
         </nav>
-
-        <!-- Notification Container -->
-        <div id="notification" class="notification"></div>
     </div>
 
     <script type="module" src="firebase-config.js"></script>
     <script type="module" src="feed.js"></script>
-    <script>
-        // Contoh sederhana untuk menangani postingan dan komentar
-        const postsContainer = document.getElementById('posts-container');
-        const postForm = document.getElementById('post-form');
-        const postContent = document.getElementById('post-content');
-        const postImage = document.getElementById('post-image');
-        const imagePreview = document.getElementById('image-preview');
-        const charCount = document.getElementById('char-count');
-        const notification = document.getElementById('notification');
-
-        // Update character count
-        postContent.addEventListener('input', () => {
-            const remaining = 280 - postContent.value.length;
-            charCount.textContent = remaining;
-        });
-
-        // Preview image
-        postImage.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = () => {
-                    imagePreview.innerHTML = `<img src="${reader.result}" alt="Preview">`;
-                };
-                reader.readAsDataURL(file);
-            }
-        });
-
-        // Load posts and comments from localStorage
-        function loadPosts() {
-            const posts = JSON.parse(localStorage.getItem('posts')) || [];
-            postsContainer.innerHTML = '';
-            posts.forEach(post => {
-                const postElement = createPostElement(post);
-                postsContainer.appendChild(postElement);
-            });
-        }
-
-        // Create post element
-        function createPostElement(post) {
-            const postDiv = document.createElement('div');
-            postDiv.className = 'post';
-            postDiv.innerHTML = `
-                <div class="post-header">
-                    <img src="https://via.placeholder.com/32" class="post-avatar" alt="User Avatar">
-                    <div class="post-meta">
-                        <span class="post-username">${post.username}</span>
-                        <span class="post-timestamp">${post.timestamp}</span>
-                    </div>
-                </div>
-                <p>${post.content}</p>
-                ${post.image ? `<img src="${post.image}" class="post-image" alt="Post Image">` : ''}
-                <div class="post-actions-buttons">
-                    <button class="like-btn" data-liked="false"><i class="far fa-heart"></i> Like</button>
-                    <button class="comment-btn"><i class="far fa-comment"></i> Comment</button>
-                </div>
-                <div class="comments-section" id="comments-${post.id}">
-                    ${post.comments.map(comment => `
-                        <div class="comment">
-                            <img src="https://via.placeholder.com/28" class="comment-avatar" alt="Comment Avatar">
-                            <div class="comment-content">
-                                <span class="comment-username">${comment.username}</span>
-                                <span class="comment-timestamp">${comment.timestamp}</span>
-                                <p>${comment.content}</p>
-                            </div>
-                        </div>
-                    `).join('')}
-                    <div class="comment-input-container">
-                        <input type="text" class="comment-input" placeholder="Write a comment...">
-                        <button class="send-comment-btn"><i class="fas fa-paper-plane"></i></button>
-                    </div>
-                </div>
-            `;
-
-            // Like button functionality
-            const likeBtn = postDiv.querySelector('.like-btn');
-            likeBtn.addEventListener('click', () => {
-                const isLiked = likeBtn.dataset.liked === 'true';
-                likeBtn.dataset.liked = !isLiked;
-                likeBtn.classList.toggle('liked');
-                likeBtn.querySelector('i').classList.toggle('far');
-                likeBtn.querySelector('i').classList.toggle('fas');
-            });
-
-            // Comment button functionality
-            const commentBtn = postDiv.querySelector('.comment-btn');
-            commentBtn.addEventListener('click', () => {
-                const commentSection = postDiv.querySelector('.comments-section');
-                commentSection.scrollIntoView({ behavior: 'smooth' });
-            });
-
-            // Add comment functionality
-            const commentInput = postDiv.querySelector('.comment-input');
-            const sendCommentBtn = postDiv.querySelector('.send-comment-btn');
-            sendCommentBtn.addEventListener('click', () => {
-                if (commentInput.value.trim()) {
-                    addComment(post.id, commentInput.value);
-                    commentInput.value = '';
-                }
-            });
-
-            return postDiv;
-        }
-
-        // Add comment
-        function addComment(postId, content) {
-            const posts = JSON.parse(localStorage.getItem('posts')) || [];
-            const post = posts.find(p => p.id === postId);
-            if (post) {
-                post.comments.push({
-                    username: 'You',
-                    timestamp: new Date().toLocaleString(),
-                    content: content
-                });
-                localStorage.setItem('posts', JSON.stringify(posts));
-                loadPosts();
-            }
-        }
-
-        // Handle post submission
-        postForm.addEventListener('submit', (e) => {
-            e.preventDefault();
-            const content = postContent.value.trim();
-            if (!content) {
-                showNotification('Please write something!', 'error');
-                return;
-            }
-
-            const posts = JSON.parse(localStorage.getItem('posts')) || [];
-            const newPost = {
-                id: Date.now(),
-                username: 'You',
-                timestamp: new Date().toLocaleString(),
-                content: content,
-                image: imagePreview.querySelector('img')?.src || '',
-                comments: []
-            };
-
-            posts.unshift(newPost);
-            localStorage.setItem('posts', JSON.stringify(posts));
-            postContent.value = '';
-            imagePreview.innerHTML = '';
-            charCount.textContent = '280';
-            loadPosts();
-            showNotification('Post uploaded successfully!', 'success');
-        });
-
-        // Show notification
-        function showNotification(message, type) {
-            notification.textContent = message;
-            notification.className = `notification ${type}`;
-            notification.classList.add('show');
-            setTimeout(() => {
-                notification.classList.remove('show');
-            }, 3000);
-        }
-
-        // Initial load
-        loadPosts();
-    </script>
-    <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'91d098534f5b0711',t:'MTc0MTQxODY4OC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script>
 </body>
 </html>
