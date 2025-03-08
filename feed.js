@@ -12,7 +12,7 @@ const IMGBB_API_KEY = "{{{{ os.environ.get('IMGBB_API_KEY') }}}}";
 let lastVisiblePost = null;
 const POSTS_PER_PAGE = 5;
 let isLoading = false;
-let currentCommentsSection = null; // Melacak overlay komentar yang sedang aktif
+let currentCommentsSection = null;
 
 // Authentication check and initial load
 auth.onAuthStateChanged(async (user) => {
@@ -57,12 +57,12 @@ async function loadInitialPosts() {
             setLoadingState(false);
         }, (error) => {
             console.error("Error listening to posts:", error);
-            showNotification("Error loading posts. Please try again.", true);
+            showNotification("Error loading posts: " + error.message, true);
             setLoadingState(false);
         });
     } catch (error) {
         console.error("Error initializing posts listener:", error);
-        showNotification("Error initializing feed. Please try again.", true);
+        showNotification("Error initializing feed: " + error.message, true);
         setLoadingState(false);
     }
 }
@@ -181,8 +181,10 @@ async function toggleComments(postId) {
     // Jika ada overlay yang sudah terbuka, tutup dulu
     if (currentCommentsSection) {
         currentCommentsSection.classList.remove('open');
-        currentCommentsSection.remove();
-        currentCommentsSection = null;
+        setTimeout(() => {
+            currentCommentsSection.remove();
+            currentCommentsSection = null;
+        }, 300); // Sesuaikan dengan durasi animasi
         return;
     }
 
@@ -197,7 +199,9 @@ async function toggleComments(postId) {
                 <i class="fas fa-times"></i>
             </button>
         </div>
-        <div class="comments-list"></div>
+        <div class="comments-list">
+            <p>Loading comments...</p>
+        </div>
         <div class="comment-input-container">
             <input type="text" class="comment-input" placeholder="Write a comment...">
             <button class="send-comment-btn" data-post-id="${postId}">
@@ -220,7 +224,7 @@ async function toggleComments(postId) {
         setTimeout(() => {
             commentsSection.remove();
             currentCommentsSection = null;
-        }, 300); // Sesuaikan dengan durasi animasi
+        }, 300);
     });
 
     // Event listener untuk tombol kirim
@@ -234,39 +238,51 @@ async function toggleComments(postId) {
         }
     });
 
-    // Load dan tampilkan komentar
+    // Load dan tampilkan komentar dari Firestore
     const commentsList = commentsSection.querySelector('.comments-list');
-    const commentsQuery = query(
-        collection(db, "comments"),
-        where("postId", "==", postId),
-        orderBy("createdAt", "asc") // Terbaru di bawah
-    );
-    onSnapshot(commentsQuery, (snapshot) => {
-        commentsList.innerHTML = snapshot.docs.map(doc => {
-            const comment = doc.data();
-            return `
-                <div class="comment">
-                    <div class="user-avatar">
-                        <img src="${comment.userAvatar || 'https://i.ibb.co.com/99yLXMCw/IMG-20250216-180931-441.jpg'}" alt="User Avatar" class="avatar">
-                        <span class="status-indicator ${comment.online ? 'online' : 'offline'}"></span>
-                    </div>
-                    <div class="comment-content">
-                        <div class="username-container">
-                            <span class="username">${comment.userName}</span>
-                            ${comment.verified ? `<span class="verified-badge"><svg id="verified" width="16" height="16" viewBox="0 0 40 40"><path d="M19.998 3.094 14.638 0l-2.972 5.15H5.432v6.354L0 14.64 3.094 20 0 25.359l5.432 3.137v5.905h5.975L14.638 40l5.36-3.094L25.358 40l3.232-5.6h6.162v-6.01L40 25.359 36.905 20 40 14.641l-5.248-3.03v-6.46h-6.419L25.358 0l-5.36 3.094Z" fill="currentColor"/><path d="M27.413 14.319l2.254 2.287-11.43 11.5-6.835-6.93 2.244-2.258 4.587 4.581 9.18-9.18Z" fill="white"/></svg></span>` : ''}
+    try {
+        const commentsQuery = query(
+            collection(db, "comments"),
+            where("postId", "==", postId),
+            orderBy("createdAt", "asc") // Tertua di atas, terbaru di bawah
+        );
+
+        onSnapshot(commentsQuery, (snapshot) => {
+            if (snapshot.empty) {
+                commentsList.innerHTML = '<p>No comments yet.</p>';
+            } else {
+                commentsList.innerHTML = snapshot.docs.map(doc => {
+                    const comment = doc.data();
+                    return `
+                        <div class="comment">
+                            <div class="user-avatar">
+                                <img src="${comment.userAvatar || 'https://i.ibb.co.com/99yLXMCw/IMG-20250216-180931-441.jpg'}" alt="User Avatar" class="avatar">
+                                <span class="status-indicator ${comment.online ? 'online' : 'offline'}"></span>
+                            </div>
+                            <div class="comment-content">
+                                <div class="username-container">
+                                    <span class="username">${comment.userName || 'Anonymous'}</span>
+                                    ${comment.verified ? `<span class="verified-badge"><svg id="verified" width="16" height="16" viewBox="0 0 40 40"><path d="M19.998 3.094 14.638 0l-2.972 5.15H5.432v6.354L0 14.64 3.094 20 0 25.359l5.432 3.137v5.905h5.975L14.638 40l5.36-3.094L25.358 40l3.232-5.6h6.162v-6.01L40 25.359 36.905 20 40 14.641l-5.248-3.03v-6.46h-6.419L25.358 0l-5.36 3.094Z" fill="currentColor"/><path d="M27.413 14.319l2.254 2.287-11.43 11.5-6.835-6.93 2.244-2.258 4.587 4.581 9.18-9.18Z" fill="white"/></svg></span>` : ''}
+                                </div>
+                                <p>${comment.content || 'No content'}</p>
+                                <span class="comment-timestamp">${formatTimestamp(comment.createdAt)}</span>
+                            </div>
                         </div>
-                        <p>${comment.content}</p>
-                        <span class="comment-timestamp">${formatTimestamp(comment.createdAt)}</span>
-                    </div>
-                </div>
-            `;
-        }).join('');
-        // Gulir ke bawah untuk menampilkan komentar terbaru
-        commentsList.scrollTop = commentsList.scrollHeight;
-    }, (error) => {
-        console.error(`Error loading comments for post ${postId}:`, error);
-        commentsList.innerHTML = '<p>Error loading comments</p>';
-    });
+                    `;
+                }).join('');
+                // Gulir ke bawah untuk menampilkan komentar terbaru
+                commentsList.scrollTop = commentsList.scrollHeight;
+            }
+        }, (error) => {
+            console.error("Error fetching comments:", error);
+            commentsList.innerHTML = `<p>Error loading comments: ${error.message}</p>`;
+            showNotification("Failed to load comments: " + error.message, true);
+        });
+    } catch (error) {
+        console.error("Error setting up comments listener:", error);
+        commentsList.innerHTML = `<p>Error: ${error.message}</p>`;
+        showNotification("Error setting up comments: " + error.message, true);
+    }
 }
 
 // Upload Image to ImgBB
@@ -318,7 +334,7 @@ async function handleLike(postId, isLiked) {
         });
     } catch (error) {
         console.error("Error updating like:", error);
-        showNotification("Failed to update like", true);
+        showNotification("Failed to update like: " + error.message, true);
     }
 }
 
@@ -355,7 +371,7 @@ async function handleComment(postId, content) {
         showNotification("Comment added successfully");
     } catch (error) {
         console.error("Error adding comment:", error);
-        showNotification("Failed to add comment", true);
+        showNotification("Failed to add comment: " + error.message, true);
     }
 }
 
@@ -385,7 +401,7 @@ function setupPostCreation() {
             showNotification("Post created successfully!");
         } catch (error) {
             console.error("Error creating post:", error);
-            showNotification("Error creating post", true);
+            showNotification("Error creating post: " + error.message, true);
         } finally {
             setLoadingState(false);
         }
@@ -407,7 +423,7 @@ function setupInfiniteScroll() {
                 }
             } catch (error) {
                 console.error("Error loading more posts:", error);
-                showNotification("Error loading more posts", true);
+                showNotification("Error loading more posts: " + error.message, true);
             } finally {
                 setLoadingState(false);
             }
@@ -435,7 +451,7 @@ function handleImagePreview(e) {
 
 // Format Timestamp
 function formatTimestamp(timestamp) {
-    if (!timestamp) return '';
+    if (!timestamp) return 'Just now';
 
     try {
         const date = timestamp.toDate();
@@ -455,7 +471,7 @@ function formatTimestamp(timestamp) {
         return `${diffDays} day${diffDays !== 1 ? 's' : ''} ago`;
     } catch (error) {
         console.error("Error formatting timestamp:", error);
-        return '';
+        return 'Unknown time';
     }
 }
 
