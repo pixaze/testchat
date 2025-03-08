@@ -60,7 +60,7 @@ async function loadInitialPosts() {
             setLoadingState(false);
         });
     } catch (error) {
-        console.error("Error initializing posts listener:", error);
+        console.error("Error initializingProceeding initializing posts listener:", error);
         showNotification("Error initializing feed. Please try again.", true);
         setLoadingState(false);
     }
@@ -105,7 +105,6 @@ async function displayPosts(posts) {
 
             const isLiked = postData.reactions?.like?.includes(currentUser.uid);
             let mediaHTML = postData.imageUrl ? `<img src="${postData.imageUrl}" alt="Post image" class="post-image">` : '';
-            const comments = await fetchComments(post.id);
 
             postElement.innerHTML = `
                 <div class="post-header">
@@ -136,35 +135,21 @@ async function displayPosts(posts) {
                         <span class="count">${postData.commentCount || 0}</span>
                     </button>
                 </div>
-                <div class="comments-section" id="comments-${post.id}">
-                    ${comments.map(comment => `
-                        <div class="comment">
-                            <div class="user-avatar">
-                                <img src="${comment.userAvatar || 'https://i.ibb.co.com/99yLXMCw/IMG-20250216-180931-441.jpg'}" alt="User Avatar" class="avatar">
-                                <span class="status-indicator ${comment.online ? 'online' : 'offline'}"></span>
-                            </div>
-                            <div class="comment-content">
-                                <div class="username-container">
-                                    <span class="username">${comment.userName}</span>
-                                    ${comment.verified ? `<span class="verified-badge"><svg id="verified" width="16" height="16" viewBox="0 0 40 40"><path d="M19.998 3.094 14.638 0l-2.972 5.15H5.432v6.354L0 14.64 3.094 20 0 25.359l5.432 3.137v5.905h5.975L14.638 40l5.36-3.094L25.358 40l3.232-5.6h6.162v-6.01L40 25.359 36.905 20 40 14.641l-5.248-3.03v-6.46h-6.419L25.358 0l-5.36 3.094Z" fill="currentColor"/><path d="M27.413 14.319l2.254 2.287-11.43 11.5-6.835-6.93 2.244-2.258 4.587 4.581 9.18-9.18Z" fill="white"/></svg></span>` : ''}
-                                </div>
-                                <p>${comment.content}</p>
-                                <span class="comment-timestamp">${formatTimestamp(comment.createdAt)}</span>
-                            </div>
-                        </div>
-                    `).join('')}
-                    <div class="comment-input-container">
-                        <input type="text" class="comment-input" placeholder="Write a comment...">
-                        <button class="send-comment-btn" data-post-id="${post.id}">
-                            <i class="fas fa-paper-plane"></i>
-                        </button>
-                    </div>
+                <div class="comments-section" id="comments-${post.id}" style="display: none;"></div>
+                <div class="comment-input-container">
+                    <input type="text" class="comment-input" placeholder="Write a comment...">
+                    <button class="send-comment-btn" data-post-id="${post.id}">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
                 </div>
             `;
 
             // Add event listeners
             const likeBtn = postElement.querySelector('.like-btn');
             likeBtn.addEventListener('click', () => handleLike(post.id, isLiked));
+
+            const commentBtn = postElement.querySelector('.comment-btn');
+            commentBtn.addEventListener('click', () => toggleComments(post.id));
 
             const commentInput = postElement.querySelector('.comment-input');
             const sendCommentBtn = postElement.querySelector('.send-comment-btn');
@@ -173,6 +158,8 @@ async function displayPosts(posts) {
                 if (content) {
                     handleComment(post.id, content);
                     commentInput.value = '';
+                    // Tampilkan komentar setelah menambah komentar baru
+                    toggleComments(post.id, true);
                 }
             });
 
@@ -184,7 +171,6 @@ async function displayPosts(posts) {
                 const likeCount = updatedData.reactions?.like?.length || 0;
                 const commentCount = updatedData.commentCount || 0;
 
-                // Update like button
                 const likeBtn = postElement.querySelector('.like-btn');
                 const likeCountSpan = likeBtn.querySelector('.count');
                 const likeIcon = likeBtn.querySelector('i');
@@ -197,51 +183,9 @@ async function displayPosts(posts) {
                     likeIcon.classList.replace('fas', 'far');
                 }
 
-                // Update comment count
                 const commentBtn = postElement.querySelector('.comment-btn');
                 const commentCountSpan = commentBtn.querySelector('.count');
                 commentCountSpan.textContent = commentCount;
-            });
-
-            // Real-time comments rendering
-            const commentsQuery = query(
-                collection(db, "comments"),
-                where("postId", "==", post.id),
-                orderBy("createdAt", "desc")
-            );
-            onSnapshot(commentsQuery, (snapshot) => {
-                console.log(`Comments updated for post ${post.id}:`, snapshot.docs.length); // Debugging
-                const commentsSection = document.getElementById(`comments-${post.id}`);
-                if (commentsSection) {
-                    const existingComments = commentsSection.querySelectorAll('.comment');
-                    existingComments.forEach(comment => comment.remove());
-
-                    const comments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    const commentInputContainer = commentsSection.querySelector('.comment-input-container');
-                    comments.forEach(comment => {
-                        const commentElement = document.createElement('div');
-                        commentElement.className = 'comment';
-                        commentElement.innerHTML = `
-                            <div class="user-avatar">
-                                <img src="${comment.userAvatar || 'https://i.ibb.co.com/99yLXMCw/IMG-20250216-180931-441.jpg'}" alt="User Avatar" class="avatar">
-                                <span class="status-indicator ${comment.online ? 'online' : 'offline'}"></span>
-                            </div>
-                            <div class="comment-content">
-                                <div class="username-container">
-                                    <span class="username">${comment.userName}</span>
-                                    ${comment.verified ? `<span class="verified-badge"><svg id="verified" width="16" height="16" viewBox="0 0 40 40"><path d="M19.998 3.094 14.638 0l-2.972 5.15H5.432v6.354L0 14.64 3.094 20 0 25.359l5.432 3.137v5.905h5.975L14.638 40l5.36-3.094L25.358 40l3.232-5.6h6.162v-6.01L40 25.359 36.905 20 40 14.641l-5.248-3.03v-6.46h-6.419L25.358 0l-5.36 3.094Z" fill="currentColor"/><path d="M27.413 14.319l2.254 2.287-11.43 11.5-6.835-6.93 2.244-2.258 4.587 4.581 9.18-9.18Z" fill="white"/></svg></span>` : ''}
-                                </div>
-                                <p>${comment.content}</p>
-                                <span class="comment-timestamp">${formatTimestamp(comment.createdAt)}</span>
-                            </div>
-                        `;
-                        commentsSection.insertBefore(commentElement, commentInputContainer);
-                    });
-                } else {
-                    console.error(`Comments section not found for post ${post.id}`);
-                }
-            }, (error) => {
-                console.error(`Error in comments listener for post ${post.id}:`, error);
             });
 
             postsContainer.appendChild(postElement);
@@ -252,20 +196,48 @@ async function displayPosts(posts) {
     }
 }
 
-// Fetch Comments for Initial Load
-async function fetchComments(postId) {
-    try {
-        const q = query(
+// Toggle Comments Visibility and Load Comments
+async function toggleComments(postId, forceShow = false) {
+    const commentsSection = document.getElementById(`comments-${postId}`);
+    if (!commentsSection) {
+        console.error(`Comments section not found for post ${postId}`);
+        return;
+    }
+
+    const isVisible = commentsSection.style.display === 'block';
+    if (forceShow || !isVisible) {
+        commentsSection.style.display = 'block';
+        // Load and display comments
+        const commentsQuery = query(
             collection(db, "comments"),
             where("postId", "==", postId),
-            orderBy("createdAt", "desc")
+            orderBy("createdAt", "asc") // Terbaru di bawah
         );
-        const commentsSnapshot = await getDocs(q);
-        console.log(`Initial comments for post ${postId}:`, commentsSnapshot.docs.length); // Debugging
-        return commentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    } catch (error) {
-        console.error("Error fetching comments:", error);
-        return [];
+        onSnapshot(commentsQuery, (snapshot) => {
+            commentsSection.innerHTML = snapshot.docs.map(doc => {
+                const comment = doc.data();
+                return `
+                    <div class="comment">
+                        <div class="user-avatar">
+                            <img src="${comment.userAvatar || 'https://i.ibb.co.com/99yLXMCw/IMG-20250216-180931-441.jpg'}" alt="User Avatar" class="avatar">
+                            <span class="status-indicator ${comment.online ? 'online' : 'offline'}"></span>
+                        </div>
+                        <div class="comment-content">
+                            <div class="username-container">
+                                <span class="username">${comment.userName}</span>
+                                ${comment.verified ? `<span class="verified-badge"><svg id="verified" width="16" height="16" viewBox="0 0 40 40"><path d="M19.998 3.094 14.638 0l-2.972 5.15H5.432v6.354L0 14.64 3.094 20 0 25.359l5.432 3.137v5.905h5.975L14.638 40l5.36-3.094L25.358 40l3.232-5.6h6.162v-6.01L40 25.359 36.905 20 40 14.641l-5.248-3.03v-6.46h-6.419L25.358 0l-5.36 3.094Z" fill="currentColor"/><path d="M27.413 14.319l2.254 2.287-11.43 11.5-6.835-6.93 2.244-2.258 4.587 4.581 9.18-9.18Z" fill="white"/></svg></span>` : ''}
+                            </div>
+                            <p>${comment.content}</p>
+                            <span class="comment-timestamp">${formatTimestamp(comment.createdAt)}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }, (error) => {
+            console.error(`Error loading comments for post ${postId}:`, error);
+        });
+    } else {
+        commentsSection.style.display = 'none';
     }
 }
 
@@ -342,10 +314,7 @@ async function handleComment(postId, content) {
             createdAt: serverTimestamp()
         };
 
-        // Tambahkan komentar ke koleksi comments
         const commentDocRef = await addDoc(collection(db, "comments"), comment);
-
-        // Perbarui dokumen postingan
         const postRef = doc(db, "posts", postId);
         const postDoc = await getDoc(postRef);
         const currentCommentCount = postDoc.data().commentCount || 0;
