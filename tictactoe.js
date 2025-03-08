@@ -1,16 +1,38 @@
 import { auth, db } from "./firebase-config.js";
 import { collection, doc, setDoc, getDoc, updateDoc, onSnapshot, query, where, getDocs } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js";
+import { signInAnonymously } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-auth.js";
 
 // State Management
 let currentGameId = null;
 
-// Cek autentikasi saat halaman dimuat
+// Generate random 6-character code
+function generateRoomCode() {
+  const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  let code = "";
+  for (let i = 0; i < 6; i++) {
+    code += characters.charAt(Math.floor(Math.random() * characters.length));
+  }
+  return code;
+}
+
+// Login anonim untuk debugging
+signInAnonymously(auth)
+  .then(() => console.log("Logged in anonymously"))
+  .catch((error) => console.error("Login error:", error));
+
+// Cek autentikasi dan setup tombol
 auth.onAuthStateChanged((user) => {
   if (user) {
     console.log("User logged in:", user.uid);
     setupGameButtons();
+    // Simulasi data profil (ganti dengan data asli dari Firestore jika ada)
+    document.getElementById("player-self").innerHTML = `
+      <img src="https://via.placeholder.com/40" alt="Self">
+      <span>${user.uid.slice(0, 8)}</span>
+    `;
   } else {
-    window.location.href = "/"; // Arahkan ke halaman login jika belum login
+    console.log("No user logged in, redirecting...");
+    window.location.href = "/";
   }
 });
 
@@ -18,11 +40,16 @@ auth.onAuthStateChanged((user) => {
 function setupGameButtons() {
   document.getElementById("create-game").addEventListener("click", async () => {
     currentGameId = await createGame();
-    listenToGame(currentGameId);
+    if (currentGameId) listenToGame(currentGameId);
   });
 
   document.getElementById("join-game").addEventListener("click", async () => {
-    currentGameId = await joinGame();
+    const code = document.getElementById("room-code").value.trim().toUpperCase();
+    if (!code) {
+      alert("Please enter a room code!");
+      return;
+    }
+    currentGameId = await joinGame(code);
     if (currentGameId) listenToGame(currentGameId);
   });
 }
@@ -30,7 +57,8 @@ function setupGameButtons() {
 // Membuat permainan baru
 async function createGame() {
   try {
-    const gameRef = doc(collection(db, "games"));
+    const roomCode = generateRoomCode();
+    const gameRef = doc(db, "games", roomCode); // Gunakan kode sebagai ID dokumen
     await setDoc(gameRef, {
       board: Array(9).fill(null),
       player1: auth.currentUser.uid,
@@ -38,40 +66,45 @@ async function createGame() {
       currentTurn: auth.currentUser.uid,
       status: "waiting",
       winner: null,
+      roomCode: roomCode,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     });
-    document.getElementById("game-status").textContent = "Waiting for another player...";
-    return gameRef.id;
+    document.getElementById("game-status").textContent = `Room created! Code: ${roomCode}`;
+    console.log("Game created with ID:", roomCode);
+    return roomCode;
   } catch (error) {
-    console.error("Error creating game:", error);
-    alert("Failed to create game!");
+    console.error("Error creating game:", error.message, error.code);
+    alert("Failed to create game: " + error.message);
     return null;
   }
 }
 
 // Bergabung ke permainan
-async function joinGame() {
+async function joinGame(code) {
   try {
-    const q = query(collection(db, "games"), where("status", "==", "waiting"));
-    const snapshot = await getDocs(q);
-    if (!snapshot.empty) {
-      const gameDoc = snapshot.docs[0];
-      const gameRef = doc(db, "games", gameDoc.id);
-      await updateDoc(gameRef, {
-        player2: auth.currentUser.uid,
-        status: "ongoing",
-        updatedAt: new Date().toISOString()
-      });
-      document.getElementById("game-status").textContent = "Game started!";
-      return gameDoc.id;
-    } else {
-      alert("No available games to join!");
+    const gameRef = doc(db, "games", code);
+    const gameSnap = await getDoc(gameRef);
+    if (!gameSnap.exists()) {
+      alert("Invalid room code!");
       return null;
     }
+    const gameData = gameSnap.data();
+    if (gameData.status !== "waiting" || gameData.player2) {
+      alert("Room is full or already started!");
+      return null;
+    }
+    await updateDoc(gameRef, {
+      player2: auth.currentUser.uid,
+      status: "ongoing",
+      updatedAt: new Date().toISOString()
+    });
+    document.getElementById("game-status").textContent = "Game started!";
+    console.log("Joined game with ID:", code);
+    return code;
   } catch (error) {
-    console.error("Error joining game:", error);
-    alert("Failed to join game!");
+    console.error("Error joining game:", error.message, error.code);
+    alert("Failed to join game: " + error.message);
     return null;
   }
 }
@@ -98,8 +131,8 @@ async function makeMove(position) {
 
     checkWinner(newBoard, gameData);
   } catch (error) {
-    console.error("Error making move:", error);
-    alert("Failed to make move!");
+    console.error("Error making move:", error.message, error.code);
+    alert("Failed to make move: " + error.message);
   }
 }
 
@@ -141,6 +174,7 @@ function listenToGame(gameId) {
     const gameData = doc.data();
     renderBoard(gameData.board, gameData);
     updateGameStatus(gameData);
+    updateOpponentProfile(gameData);
   });
 }
 
@@ -164,7 +198,7 @@ function renderBoard(board, gameData) {
 function updateGameStatus(gameData) {
   const statusElement = document.getElementById("game-status");
   if (gameData.status === "waiting") {
-    statusElement.textContent = "Waiting for another player...";
+    statusElement.textContent = `Room created! Code: ${gameData.roomCode}`;
   } else if (gameData.status === "ongoing") {
     statusElement.textContent = gameData.currentTurn === auth.currentUser.uid 
       ? "Your turn!" 
@@ -177,5 +211,18 @@ function updateGameStatus(gameData) {
     } else {
       statusElement.textContent = "It's a draw!";
     }
+  }
+}
+
+// Memperbarui profil lawan
+function updateOpponentProfile(gameData) {
+  const opponentId = gameData.player1 === auth.currentUser.uid ? gameData.player2 : gameData.player1;
+  if (opponentId) {
+    document.getElementById("player-opponent").innerHTML = `
+      <img src="https://via.placeholder.com/40" alt="Opponent">
+      <span>${opponentId.slice(0, 8)}</span>
+    `;
+  } else {
+    document.getElementById("player-opponent").innerHTML = "<span>Waiting...</span>";
   }
 }
