@@ -91,7 +91,7 @@ async function fetchPosts() {
     }
 }
 
-// Display Posts with Real-Time Like Updates
+// Display Posts with Real-Time Updates
 async function displayPosts(posts) {
     const postsContainer = document.getElementById("posts-container");
     const currentUser = auth.currentUser;
@@ -133,7 +133,7 @@ async function displayPosts(posts) {
                     </button>
                     <button class="reaction-btn comment-btn" data-post-id="${post.id}">
                         <i class="far fa-comment"></i>
-                        <span class="count">${comments.length}</span>
+                        <span class="count">${postData.commentCount || 0}</span>
                     </button>
                 </div>
                 <div class="comments-section" id="comments-${post.id}">
@@ -176,24 +176,66 @@ async function displayPosts(posts) {
                 }
             });
 
-            // Real-time like updates
+            // Real-time like and comment updates
             const postRef = doc(db, "posts", post.id);
             onSnapshot(postRef, (doc) => {
                 const updatedData = doc.data();
                 const updatedIsLiked = updatedData.reactions?.like?.includes(currentUser.uid);
                 const likeCount = updatedData.reactions?.like?.length || 0;
+                const commentCount = updatedData.commentCount || 0;
 
-                const btn = postElement.querySelector('.like-btn');
-                const countSpan = btn.querySelector('.count');
-                const icon = btn.querySelector('i');
-
-                countSpan.textContent = likeCount;
+                // Update like button
+                const likeBtn = postElement.querySelector('.like-btn');
+                const likeCountSpan = likeBtn.querySelector('.count');
+                const likeIcon = likeBtn.querySelector('i');
+                likeCountSpan.textContent = likeCount;
                 if (updatedIsLiked) {
-                    btn.classList.add('liked');
-                    icon.classList.replace('far', 'fas');
+                    likeBtn.classList.add('liked');
+                    likeIcon.classList.replace('far', 'fas');
                 } else {
-                    btn.classList.remove('liked');
-                    icon.classList.replace('fas', 'far');
+                    likeBtn.classList.remove('liked');
+                    likeIcon.classList.replace('fas', 'far');
+                }
+
+                // Update comment count
+                const commentBtn = postElement.querySelector('.comment-btn');
+                const commentCountSpan = commentBtn.querySelector('.count');
+                commentCountSpan.textContent = commentCount;
+            });
+
+            // Real-time comments rendering
+            const commentsQuery = query(
+                collection(db, "comments"),
+                where("postId", "==", post.id),
+                orderBy("createdAt", "desc")
+            );
+            onSnapshot(commentsQuery, (snapshot) => {
+                const commentsSection = postElement.querySelector(`#comments-${post.id}`);
+                if (commentsSection) {
+                    const existingComments = commentsSection.querySelectorAll('.comment');
+                    existingComments.forEach(comment => comment.remove());
+
+                    const comments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    const commentInputContainer = commentsSection.querySelector('.comment-input-container');
+                    comments.forEach(comment => {
+                        const commentElement = document.createElement('div');
+                        commentElement.className = 'comment';
+                        commentElement.innerHTML = `
+                            <div class="user-avatar">
+                                <img src="${comment.userAvatar || 'https://i.ibb.co.com/99yLXMCw/IMG-20250216-180931-441.jpg'}" alt="User Avatar" class="avatar">
+                                <span class="status-indicator ${comment.online ? 'online' : 'offline'}"></span>
+                            </div>
+                            <div class="comment-content">
+                                <div class="username-container">
+                                    <span class="username">${comment.userName}</span>
+                                    ${comment.verified ? `<span class="verified-badge"><svg id="verified" width="16" height="16" viewBox="0 0 40 40"><path d="M19.998 3.094 14.638 0l-2.972 5.15H5.432v6.354L0 14.64 3.094 20 0 25.359l5.432 3.137v5.905h5.975L14.638 40l5.36-3.094L25.358 40l3.232-5.6h6.162v-6.01L40 25.359 36.905 20 40 14.641l-5.248-3.03v-6.46h-6.419L25.358 0l-5.36 3.094Z" fill="currentColor"/><path d="M27.413 14.319l2.254 2.287-11.43 11.5-6.835-6.93 2.244-2.258 4.587 4.581 9.18-9.18Z" fill="white"/></svg></span>` : ''}
+                                </div>
+                                <p>${comment.content}</p>
+                                <span class="comment-timestamp">${formatTimestamp(comment.createdAt)}</span>
+                            </div>
+                        `;
+                        commentsSection.insertBefore(commentElement, commentInputContainer);
+                    });
                 }
             });
 
@@ -205,7 +247,7 @@ async function displayPosts(posts) {
     }
 }
 
-// Fetch Comments for Post
+// Fetch Comments for Initial Load
 async function fetchComments(postId) {
     try {
         const q = query(
@@ -213,15 +255,6 @@ async function fetchComments(postId) {
             where("postId", "==", postId),
             orderBy("createdAt", "desc")
         );
-        
-        onSnapshot(q, (snapshot) => {
-            const commentBtn = document.querySelector(`.comment-btn[data-post-id="${postId}"]`);
-            if (commentBtn) {
-                const countSpan = commentBtn.querySelector('.count');
-                countSpan.textContent = snapshot.size;
-            }
-        });
-
         const commentsSnapshot = await getDocs(q);
         return commentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     } catch (error) {
@@ -303,7 +336,19 @@ async function handleComment(postId, content) {
             createdAt: serverTimestamp()
         };
 
-        await addDoc(collection(db, "comments"), comment);
+        // Tambahkan komentar ke koleksi comments
+        const commentDocRef = await addDoc(collection(db, "comments"), comment);
+
+        // Perbarui dokumen postingan dengan ID komentar dan jumlah komentar
+        const postRef = doc(db, "posts", postId);
+        const postDoc = await getDoc(postRef);
+        const currentCommentCount = postDoc.data().commentCount || 0;
+
+        await updateDoc(postRef, {
+            comments: arrayUnion(commentDocRef.id), // Tambahkan ID komentar ke array comments
+            commentCount: currentCommentCount + 1 // Tambah jumlah komentar
+        });
+
         showNotification("Comment added successfully");
     } catch (error) {
         console.error("Error adding comment:", error);
@@ -454,7 +499,9 @@ async function createPost(content, imageUrl = null) {
             content,
             imageUrl,
             createdAt: serverTimestamp(),
-            reactions: { like: [] }
+            reactions: { like: [] },
+            comments: [], // Array untuk menyimpan ID komentar
+            commentCount: 0 // Jumlah komentar awal
         });
     } catch (error) {
         console.error("Error creating post:", error);
