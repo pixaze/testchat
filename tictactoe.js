@@ -4,6 +4,7 @@ import { signInAnonymously } from "https://www.gstatic.com/firebasejs/9.6.1/fire
 
 // State Management
 let currentGameId = null;
+let currentUserData = null;
 
 // Generate random 6-character code
 function generateRoomCode() {
@@ -15,21 +16,43 @@ function generateRoomCode() {
   return code;
 }
 
+// Ambil data pengguna dari koleksi users
+async function getUserData(uid) {
+  const userRef = doc(db, "users", uid);
+  const userSnap = await getDoc(userRef);
+  if (userSnap.exists()) {
+    return userSnap.data();
+  }
+  return { username: "Anonymous", avatar: "https://via.placeholder.com/40" };
+}
+
 // Login anonim untuk debugging
 signInAnonymously(auth)
-  .then(() => console.log("Logged in anonymously"))
+  .then(async () => {
+    console.log("Logged in anonymously");
+    // Simpan data pengguna ke koleksi users jika belum ada
+    const userRef = doc(db, "users", auth.currentUser.uid);
+    const userSnap = await getDoc(userRef);
+    if (!userSnap.exists()) {
+      await setDoc(userRef, {
+        username: "Player" + Math.floor(Math.random() * 1000),
+        avatar: "https://via.placeholder.com/40",
+        createdAt: new Date().toISOString()
+      });
+    }
+  })
   .catch((error) => console.error("Login error:", error));
 
 // Cek autentikasi dan setup tombol
-auth.onAuthStateChanged((user) => {
+auth.onAuthStateChanged(async (user) => {
   if (user) {
     console.log("User logged in:", user.uid);
-    setupGameButtons();
-    // Simulasi data profil (ganti dengan data asli dari Firestore jika ada)
+    currentUserData = await getUserData(user.uid);
     document.getElementById("player-self").innerHTML = `
-      <img src="https://via.placeholder.com/40" alt="Self">
-      <span>${user.uid.slice(0, 8)}</span>
+      <img src="${currentUserData.avatar}" alt="Self">
+      <span>${currentUserData.username}</span>
     `;
+    setupGameButtons();
   } else {
     console.log("No user logged in, redirecting...");
     window.location.href = "/";
@@ -58,7 +81,7 @@ function setupGameButtons() {
 async function createGame() {
   try {
     const roomCode = generateRoomCode();
-    const gameRef = doc(db, "games", roomCode); // Gunakan kode sebagai ID dokumen
+    const gameRef = doc(db, "games", roomCode);
     await setDoc(gameRef, {
       board: Array(9).fill(null),
       player1: auth.currentUser.uid,
@@ -215,12 +238,13 @@ function updateGameStatus(gameData) {
 }
 
 // Memperbarui profil lawan
-function updateOpponentProfile(gameData) {
+async function updateOpponentProfile(gameData) {
   const opponentId = gameData.player1 === auth.currentUser.uid ? gameData.player2 : gameData.player1;
   if (opponentId) {
+    const opponentData = await getUserData(opponentId);
     document.getElementById("player-opponent").innerHTML = `
-      <img src="https://via.placeholder.com/40" alt="Opponent">
-      <span>${opponentId.slice(0, 8)}</span>
+      <img src="${opponentData.avatar}" alt="Opponent">
+      <span>${opponentData.username}</span>
     `;
   } else {
     document.getElementById("player-opponent").innerHTML = "<span>Waiting...</span>";
