@@ -224,7 +224,7 @@
 
         .user-avatar {
             position: relative;
-            width: 40px; /* Ukuran avatar 40px */
+            width: 40px;
             height: 40px;
         }
 
@@ -342,8 +342,11 @@
         /* Comments Section */
         .comments-section {
             margin-top: 15px;
-            border-top: 1px solid var(--border-color);
             padding-top: 15px;
+            border-top: 1px solid var(--border-color);
+            max-height: 300px;
+            overflow-y: auto;
+            display: none; /* Sembunyikan secara default */
         }
 
         .comment {
@@ -361,12 +364,13 @@
         }
 
         .comment .user-avatar {
-            width: 40px; /* Ukuran avatar komentar 40px */
+            width: 40px;
             height: 40px;
         }
 
         .comment-content {
             flex: 1;
+            margin-left: 10px;
         }
 
         .comment-timestamp {
@@ -378,6 +382,7 @@
             display: flex;
             gap: 10px;
             margin-top: 10px;
+            display: none; /* Sembunyikan secara default */
         }
 
         .comment-input {
@@ -526,7 +531,7 @@
             }
 
             .user-avatar {
-                width: 32px; /* Sesuaikan sedikit untuk layar kecil */
+                width: 32px;
                 height: 32px;
             }
 
@@ -597,5 +602,6 @@
 
     <script type="module" src="firebase-config.js"></script>
     <script type="module" src="feed.js"></script>
+    <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'91d10ab6784e44dd',t:'MTc0MTQyMzM3My4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script>
 </body>
 </html>
