@@ -5,50 +5,255 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#2196f3">
     <title>Feed - Social Chat</title>
-    <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
+        :root {
+            /* Tema terang sebagai default */
+            --primary-color: #2196f3;
+            --primary-dark: #1976d2;
+            --surface-color: #ffffff;
+            --background-color: #f5f7fa;
+            --text-primary: #1a1a1a;
+            --text-secondary: #666666;
+            --border-color: #e0e0e0;
+            --shadow-color: rgba(0, 0, 0, 0.1);
+            --hover-color: #f0f4f8;
+        }
+
+        /* Tema gelap hanya jika sistem mendukung */
+        @media (prefers-color-scheme: dark) {
+            [data-theme="system"] {
+                --primary-color: #42a5f5;
+                --primary-dark: #1e88e5;
+                --surface-color: #2a2a2a;
+                --background-color: #1a1a1a;
+                --text-primary: #e0e0e0;
+                --text-secondary: #a0a0a0;
+                --border-color: #404040;
+                --shadow-color: rgba(0, 0, 0, 0.3);
+                --hover-color: #333333;
+            }
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--background-color);
+            color: var(--text-primary);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        .feed-container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Feed Header */
+        .feed-header {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 15px 20px;
+            background: var(--surface-color);
+            border-radius: 12px;
+            box-shadow: 0 2px 10px var(--shadow-color);
+            margin-bottom: 20px;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .back-btn {
+            background: none;
+            border: none;
+            font-size: 1.2em;
+            color: var(--primary-color);
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+
+        .back-btn:hover {
+            color: var(--primary-dark);
+        }
+
+        .feed-header h2 {
+            font-size: 1.5em;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        /* Post Composer */
+        .post-composer {
+            background: var(--surface-color);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 2px 10px var(--shadow-color);
+            margin-bottom: 20px;
+            transition: transform 0.2s ease;
+        }
+
+        .post-composer:hover {
+            transform: translateY(-3px);
+        }
+
+        .post-form {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .post-input-wrapper {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .post-input {
+            width: 100%;
+            min-height: 100px;
+            padding: 12px 15px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: var(--background-color);
+            color: var(--text-primary);
+            font-size: 1em;
+            resize: vertical;
+            transition: border-color 0.2s;
+        }
+
+        .post-input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 5px rgba(33, 150, 243, 0.3);
+        }
+
+        .post-media {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .media-upload-btn {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            background: var(--primary-color);
+            color: white;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .media-upload-btn:hover {
+            background: var(--primary-dark);
+        }
+
+        #image-preview {
+            max-width: 100%;
+            max-height: 300px; /* Batas tinggi untuk pratinjau */
+            border-radius: 8px;
+            overflow: hidden;
+            object-fit: contain; /* Memastikan gambar/video tidak terdistorsi */
+        }
+
+        .post-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        #char-count {
+            font-size: 0.9em;
+            color: var(--text-secondary);
+        }
+
+        .post-btn {
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .post-btn:hover {
+            background: var(--primary-dark);
+        }
+
+        /* Posts Container */
+        .posts-container {
+            flex: 1;
+        }
+
         .post {
             background: var(--surface-color);
             border-radius: 12px;
-            padding: 16px;
-            margin-bottom: 16px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            transition: transform 0.2s;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px var(--shadow-color);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
         }
 
         .post:hover {
-            transform: translateY(-2px);
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px var(--shadow-color);
         }
 
         .post-image {
             width: 100%;
-            max-height: 400px;
-            object-fit: cover;
+            max-height: 400px; /* Batas tinggi untuk gambar/video */
+            object-fit: contain; /* Memastikan tidak melebihi ukuran */
             border-radius: 8px;
-            margin: 8px 0;
+            margin: 10px 0;
+            transition: opacity 0.3s ease;
         }
 
+        .post-image:hover {
+            opacity: 0.9;
+        }
+
+        /* Comments Section */
         .comments-section {
-            margin-top: 12px;
+            margin-top: 15px;
             border-top: 1px solid var(--border-color);
-            padding-top: 12px;
+            padding-top: 15px;
         }
 
         .comment {
             display: flex;
-            align-items: start;
-            margin-bottom: 12px;
-            padding: 8px;
+            align-items: flex-start;
+            margin-bottom: 15px;
+            padding: 10px;
             background: var(--background-color);
             border-radius: 8px;
+            transition: background 0.2s;
+        }
+
+        .comment:hover {
+            background: var(--hover-color);
         }
 
         .comment-avatar {
-            width: 32px;
-            height: 32px;
+            width: 36px;
+            height: 36px;
             border-radius: 50%;
-            margin-right: 8px;
+            margin-right: 10px;
+            object-fit: cover;
         }
 
         .comment-content {
@@ -56,28 +261,36 @@
         }
 
         .comment-username {
-            font-weight: bold;
+            font-weight: 600;
             margin-right: 8px;
+            color: var(--text-primary);
         }
 
         .comment-timestamp {
-            font-size: 0.8em;
+            font-size: 0.85em;
             color: var(--text-secondary);
         }
 
         .comment-input-container {
             display: flex;
-            gap: 8px;
-            margin-top: 8px;
+            gap: 10px;
+            margin-top: 10px;
         }
 
         .comment-input {
             flex: 1;
-            padding: 8px 12px;
+            padding: 10px 15px;
             border: 1px solid var(--border-color);
             border-radius: 20px;
             background: var(--background-color);
             color: var(--text-primary);
+            font-size: 0.95em;
+            transition: border-color 0.2s;
+        }
+
+        .comment-input:focus {
+            outline: none;
+            border-color: var(--primary-color);
         }
 
         .send-comment-btn {
@@ -85,13 +298,13 @@
             color: white;
             border: none;
             border-radius: 50%;
-            width: 36px;
-            height: 36px;
+            width: 40px;
+            height: 40px;
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            transition: background-color 0.2s;
+            transition: background 0.2s ease;
         }
 
         .send-comment-btn:hover {
@@ -100,16 +313,88 @@
 
         .liked {
             color: #e91e63;
+            transition: color 0.2s;
         }
 
+        /* Navigation Bar */
+        .navigation-bar {
+            display: flex;
+            justify-content: space-around;
+            padding: 15px;
+            background: var(--surface-color);
+            border-radius: 12px;
+            box-shadow: 0 2px 10px var(--shadow-color);
+            position: sticky;
+            bottom: 20px;
+            margin-top: 20px;
+        }
+
+        .nav-btn {
+            background: none;
+            border: none;
+            font-size: 1.2em;
+            color: var(--text-secondary);
+            cursor: pointer;
+            padding: 10px;
+            transition: color 0.2s, transform 0.2s;
+        }
+
+        .nav-btn:hover {
+            color: var(--primary-color);
+            transform: scale(1.1);
+        }
+
+        .nav-btn.active {
+            color: var(--primary-color);
+            font-weight: bold;
+        }
+
+        /* Responsive Design */
         @media (max-width: 768px) {
+            .feed-container {
+                padding: 10px;
+            }
+
+            .feed-header {
+                padding: 10px 15px;
+            }
+
             .post {
-                margin: 8px;
-                padding: 12px;
+                padding: 15px;
+                margin: 10px 0;
             }
 
             .post-image {
-                max-height: 300px;
+                max-height: 300px; /* Batas lebih kecil untuk layar sedang */
+            }
+
+            .navigation-bar {
+                padding: 10px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .feed-header h2 {
+                font-size: 1.2em;
+            }
+
+            .post-input {
+                min-height: 80px;
+                font-size: 0.9em;
+            }
+
+            .comment-avatar {
+                width: 30px;
+                height: 30px;
+            }
+
+            .send-comment-btn {
+                width: 36px;
+                height: 36px;
+            }
+
+            .post-image {
+                max-height: 250px; /* Batas lebih kecil untuk layar kecil */
             }
         }
     </style>
@@ -140,7 +425,7 @@
                         <div id="image-preview"></div>
                     </div>
                     <div class="post-actions">
-                        <span id="char-count">fakyu</span>
+                        <span id="char-count">280</span>
                         <button type="submit" class="post-btn" id="submit-post">
                             <i class="fas fa-paper-plane"></i> Post
                         </button>
@@ -170,5 +455,6 @@
 
     <script type="module" src="firebase-config.js"></script>
     <script type="module" src="feed.js"></script>
+    <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'91d098534f5b0711',t:'MTc0MTQxODY4OC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script>
 </body>
 </html>
