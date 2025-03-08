@@ -298,7 +298,3 @@ window.logout = async () => {
         showNotification("Error signing out", true);
     }
 };
-
-function ip() {
-        window.location.href = "ip.html";
-}
