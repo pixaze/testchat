@@ -10,7 +10,7 @@ import {
     serverTimestamp,
     updateDoc,
     addDoc,
-    getDocs // Ditambahkan untuk mengambil pesan yang akan ditandai dibaca
+    getDocs
 } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-auth.js";
 
@@ -18,7 +18,7 @@ let currentUser = null;
 let contextMenuUser = null;
 let showOnlineOnly = false;
 let searchTerm = '';
-let unreadCounts = {}; // Objek untuk melacak jumlah pesan yang belum dibaca
+let unreadCounts = {};
 
 // Check authentication status
 onAuthStateChanged(auth, async (user) => {
@@ -29,7 +29,7 @@ onAuthStateChanged(auth, async (user) => {
             updateOnlineStatus(true);
             initializeUsers();
             setupSearch();
-            loadUnreadMessages(); // Memuat pesan yang belum dibaca
+            loadUnreadMessages();
         } else {
             window.location.href = "/";
         }
@@ -50,7 +50,7 @@ function loadActiveUsers() {
     const activeUsersDiv = document.getElementById("active-users");
     const q = query(
         collection(db, "messages"),
-        where("receiver", "==", currentUser.uid), // Menggunakan receiver
+        where("receiver", "==", currentUser.uid),
         orderBy("timestamp", "desc")
     );
 
@@ -60,7 +60,7 @@ function loadActiveUsers() {
 
         snapshot.forEach(doc => {
             const message = doc.data();
-            const otherUserId = message.sender; // Menggunakan sender sebagai pengenal
+            const otherUserId = message.sender;
             if (otherUserId && !activeUsers.has(otherUserId)) {
                 activeUsers.add(otherUserId);
                 activeUserPromises.push(getDoc(doc(db, "users", otherUserId)));
@@ -92,7 +92,6 @@ function loadAllUsers() {
         userList.innerHTML = "";
         let totalCount = 0;
 
-        // Add AI user first
         const aiUser = {
             username: "SPOVA AI",
             bio: "Your AI Assistant",
@@ -123,21 +122,22 @@ function loadAllUsers() {
 function loadUnreadMessages() {
     const q = query(
         collection(db, "messages"),
-        where("receiver", "==", currentUser.uid),
-        where("read", "==", false) // Hanya pesan yang belum dibaca
+        where("receiver", "==", currentUser.uid)
     );
 
     onSnapshot(q, (snapshot) => {
-        unreadCounts = {}; // Reset hitungan
+        unreadCounts = {};
         snapshot.forEach(doc => {
             const message = doc.data();
             const senderId = message.sender;
-            if (senderId !== currentUser.uid) {
+            // Anggap pesan belum dibaca jika read tidak ada atau false
+            const isUnread = message.read === undefined || message.read === false;
+            if (senderId !== currentUser.uid && isUnread) {
                 unreadCounts[senderId] = (unreadCounts[senderId] || 0) + 1;
             }
         });
-        console.log("Unread Counts:", unreadCounts); // Debugging
-        loadActiveUsers(); // Perbarui tampilan
+        console.log("Unread Counts:", unreadCounts);
+        loadActiveUsers();
         loadAllUsers();
     }, (error) => {
         console.error("Error loading unread messages:", error);
@@ -189,7 +189,7 @@ function getVerificationBadges(user) {
     let badges = '';
     if (user.veriai) {
         badges += `<span class="verified-badge">
-            <svg id="veriai" width="40" height="40" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+            <svg id="veriai" width="16" height="16" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
                 <path d="M19.998 3.094 14.638 0l-2.972 5.15H5.432v6.354L0 14.64 3.094 20 0 25.359l5.432 3.137v5.905h5.975L14.638 40l5.36-3.094L25.358 40l3.232-5.6h6.162v-6.01L40 25.359 36.905 20 40 14.641l-5.248-3.03v-6.46h-6.419L25.358 0l-5.36 3.094Z" fill="currentColor"/>
                 <path d="M20 30 C12 22, 6 16, 10 10 C14 5, 20 8, 20 12 C20 8, 26 5, 30 10 C34 16, 28 22, 20 30" fill="white"/>
             </svg>
@@ -309,7 +309,7 @@ document.querySelectorAll('.menu-item').forEach(item => {
                 break;
         }
     });
-});
+};
 
 // Function to mark messages as read
 async function markMessagesAsRead(userId) {
@@ -334,7 +334,7 @@ async function markMessagesAsRead(userId) {
 
 // Start chat with selected user
 window.startChat = (userId) => {
-    markMessagesAsRead(userId); // Tandai pesan sebagai dibaca saat chat dibuka
+    markMessagesAsRead(userId);
     window.location.href = `chat?user=${userId}`;
 };
 
@@ -346,8 +346,8 @@ async function sendMessage(receiverId, text) {
             receiver: receiverId,
             text: text,
             timestamp: serverTimestamp(),
-            read: false, // Default belum dibaca
-            participants: [currentUser.uid, receiverId] // Untuk konsistensi
+            read: false,
+            participants: [currentUser.uid, receiverId]
         };
         await addDoc(collection(db, "messages"), messageData);
         console.log("Message sent successfully:", messageData);
