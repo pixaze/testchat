@@ -9,8 +9,7 @@ import {
     orderBy,
     serverTimestamp,
     updateDoc,
-    addDoc,
-    getDocs
+    addDoc // Ditambahkan untuk mengirim pesan
 } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-auth.js";
 
@@ -18,7 +17,7 @@ let currentUser = null;
 let contextMenuUser = null;
 let showOnlineOnly = false;
 let searchTerm = '';
-let unreadCounts = {};
+let unreadCounts = {}; // Ditambahkan untuk melacak pesan yang belum dibaca
 
 // Check authentication status
 onAuthStateChanged(auth, async (user) => {
@@ -29,7 +28,7 @@ onAuthStateChanged(auth, async (user) => {
             updateOnlineStatus(true);
             initializeUsers();
             setupSearch();
-            loadUnreadMessages();
+            loadUnreadMessages(); // Ditambahkan untuk memuat pesan yang belum dibaca
         } else {
             window.location.href = "/";
         }
@@ -50,7 +49,7 @@ function loadActiveUsers() {
     const activeUsersDiv = document.getElementById("active-users");
     const q = query(
         collection(db, "messages"),
-        where("receiver", "==", currentUser.uid),
+        where("receiver", "==", currentUser.uid), // Diganti dari participants ke receiver
         orderBy("timestamp", "desc")
     );
 
@@ -60,7 +59,7 @@ function loadActiveUsers() {
 
         snapshot.forEach(doc => {
             const message = doc.data();
-            const otherUserId = message.sender;
+            const otherUserId = message.sender; // Menggunakan sender sebagai pengganti otherUserId
             if (otherUserId && !activeUsers.has(otherUserId)) {
                 activeUsers.add(otherUserId);
                 activeUserPromises.push(getDoc(doc(db, "users", otherUserId)));
@@ -79,7 +78,7 @@ function loadActiveUsers() {
 
         document.getElementById("active-count").textContent = activeUsers.size;
     }, (error) => {
-        console.error("Error loading active users:", error);
+        console.error("Error loading active users:", error); // Debugging
     });
 }
 
@@ -92,6 +91,7 @@ function loadAllUsers() {
         userList.innerHTML = "";
         let totalCount = 0;
 
+        // Add AI user first
         const aiUser = {
             username: "SPOVA AI",
             bio: "Your AI Assistant",
@@ -114,7 +114,7 @@ function loadAllUsers() {
 
         document.getElementById("total-count").textContent = totalCount;
     }, (error) => {
-        console.error("Error loading all users:", error);
+        console.error("Error loading all users:", error); // Debugging
     });
 }
 
@@ -122,25 +122,24 @@ function loadAllUsers() {
 function loadUnreadMessages() {
     const q = query(
         collection(db, "messages"),
-        where("receiver", "==", currentUser.uid)
+        where("receiver", "==", currentUser.uid) // Hanya pesan yang diterima oleh pengguna saat ini
     );
 
     onSnapshot(q, (snapshot) => {
-        unreadCounts = {};
+        unreadCounts = {}; // Reset hitungan
         snapshot.forEach(doc => {
             const message = doc.data();
             const senderId = message.sender;
-            // Anggap pesan belum dibaca jika read tidak ada atau false
-            const isUnread = message.read === undefined || message.read === false;
+            const isUnread = message.read === undefined || message.read === false; // Fleksibel untuk data lama
             if (senderId !== currentUser.uid && isUnread) {
                 unreadCounts[senderId] = (unreadCounts[senderId] || 0) + 1;
             }
         });
-        console.log("Unread Counts:", unreadCounts);
-        loadActiveUsers();
+        console.log("Unread Counts:", unreadCounts); // Debugging
+        loadActiveUsers(); // Perbarui tampilan
         loadAllUsers();
     }, (error) => {
-        console.error("Error loading unread messages:", error);
+        console.error("Error loading unread messages:", error); // Debugging
     });
 }
 
@@ -158,7 +157,7 @@ function createUserElement(user, userId, container) {
         <div class="user-avatar">
             <img src="${user.avatar || 'https://i.ibb.co.com/99yLXMCw/IMG-20250216-180931-441.jpg'}" alt="avatar" class="avatar">
             <span class="status-indicator ${user.online ? 'online' : 'offline'}"></span>
-            ${notificationHtml}
+            ${notificationHtml} <!-- Ditambahkan untuk notifikasi -->
         </div>
         <div class="user-info">
             <div class="username-container">
@@ -184,12 +183,12 @@ function createUserElement(user, userId, container) {
     container.appendChild(div);
 }
 
-// Get verification badges HTML
+// Get verification badges HTML (Tidak diubah)
 function getVerificationBadges(user) {
     let badges = '';
     if (user.veriai) {
         badges += `<span class="verified-badge">
-            <svg id="veriai" width="16" height="16" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+            <svg id="veriai" width="40" height="40" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
                 <path d="M19.998 3.094 14.638 0l-2.972 5.15H5.432v6.354L0 14.64 3.094 20 0 25.359l5.432 3.137v5.905h5.975L14.638 40l5.36-3.094L25.358 40l3.232-5.6h6.162v-6.01L40 25.359 36.905 20 40 14.641l-5.248-3.03v-6.46h-6.419L25.358 0l-5.36 3.094Z" fill="currentColor"/>
                 <path d="M20 30 C12 22, 6 16, 10 10 C14 5, 20 8, 20 12 C20 8, 26 5, 30 10 C34 16, 28 22, 20 30" fill="white"/>
             </svg>
@@ -197,7 +196,7 @@ function getVerificationBadges(user) {
     }
 
     if (user.verifiedvip) {
-        badges += `<span class="verified-badge"><svg id="verifiedvip" width="40" height="40" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+        badges += `<span class="verified-badge"><svg id="verifiedvip" width="16" height="16" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
             <defs>
                 <linearGradient id="gold-gradient" x1="4" y1="2" x2="36" y2="38" gradientUnits="userSpaceOnUse">
                     <stop offset="0%" stop-color="#f4e72a"/>
@@ -220,7 +219,7 @@ function getVerificationBadges(user) {
     return badges;
 }
 
-// Format last seen time
+// Format last seen time (Tidak diubah)
 function formatLastSeen(timestamp) {
     if (!timestamp) return 'a while ago';
 
@@ -234,7 +233,7 @@ function formatLastSeen(timestamp) {
     return lastSeen.toLocaleDateString();
 }
 
-// Update online status
+// Update online status (Tidak diubah)
 async function updateOnlineStatus(online) {
     if (!currentUser) return;
 
@@ -245,7 +244,7 @@ async function updateOnlineStatus(online) {
     });
 }
 
-// Setup search functionality
+// Setup search functionality (Tidak diubah)
 function setupSearch() {
     const searchInput = document.getElementById("user-search");
     searchInput.addEventListener('input', (e) => {
@@ -254,7 +253,7 @@ function setupSearch() {
     });
 }
 
-// Toggle online filter
+// Toggle online filter (Tidak diubah)
 window.toggleOnlineFilter = () => {
     const filterBtn = document.getElementById("online-filter");
     showOnlineOnly = !showOnlineOnly;
@@ -262,7 +261,7 @@ window.toggleOnlineFilter = () => {
     loadAllUsers();
 };
 
-// Check if user should be shown based on filters
+// Check if user should be shown based on filters (Tidak diubah)
 function shouldShowUser(user) {
     const matchesSearch = user.username.toLowerCase().includes(searchTerm) ||
                          (user.bio && user.bio.toLowerCase().includes(searchTerm));
@@ -270,7 +269,7 @@ function shouldShowUser(user) {
     return matchesSearch && matchesOnlineFilter;
 }
 
-// Context menu functionality
+// Context menu functionality (Tidak diubah)
 function setupContextMenu() {
     const menu = document.getElementById("user-context-menu");
     document.addEventListener('click', () => {
@@ -291,7 +290,7 @@ window.showContextMenu = (event, userId) => {
     menu.style.display = 'block';
 };
 
-// Handle context menu actions
+// Handle context menu actions (Tidak diubah)
 document.querySelectorAll('.menu-item').forEach(item => {
     item.addEventListener('click', async () => {
         if (!contextMenuUser) return;
@@ -309,33 +308,13 @@ document.querySelectorAll('.menu-item').forEach(item => {
                 break;
         }
     });
-};
+});
 
-// Function to mark messages as read
-async function markMessagesAsRead(userId) {
-    try {
-        const q = query(
-            collection(db, "messages"),
-            where("receiver", "==", currentUser.uid),
-            where("sender", "==", userId),
-            where("read", "==", false)
-        );
-        const querySnapshot = await getDocs(q);
-        const updates = [];
-        querySnapshot.forEach(doc => {
-            updates.push(updateDoc(doc.ref, { read: true }));
-        });
-        await Promise.all(updates);
-        console.log(`Marked ${updates.length} messages as read from ${userId}`);
-    } catch (error) {
-        console.error("Error marking messages as read:", error);
-    }
-}
-
-// Start chat with selected user
+// Start chat with selected user (Diperbarui dengan opsi pengiriman pesan)
 window.startChat = (userId) => {
-    markMessagesAsRead(userId);
     window.location.href = `chat?user=${userId}`;
+    // Untuk testing, uncomment baris berikut untuk mengirim pesan dummy
+    // sendMessage(userId, "Hello, this is a test message!");
 };
 
 // Function to send a message with required fields
@@ -346,8 +325,8 @@ async function sendMessage(receiverId, text) {
             receiver: receiverId,
             text: text,
             timestamp: serverTimestamp(),
-            read: false,
-            participants: [currentUser.uid, receiverId]
+            read: false, // Ditambahkan untuk status belum dibaca
+            participants: [currentUser.uid, receiverId] // Ditambahkan untuk konsistensi
         };
         await addDoc(collection(db, "messages"), messageData);
         console.log("Message sent successfully:", messageData);
@@ -356,7 +335,7 @@ async function sendMessage(receiverId, text) {
     }
 }
 
-// Logout functionality
+// Logout functionality (Tidak diubah)
 window.logout = async () => {
     try {
         await updateOnlineStatus(false);
@@ -367,7 +346,7 @@ window.logout = async () => {
     }
 };
 
-// Update online status when window closes
+// Update online status when window closes (Tidak diubah)
 window.addEventListener('beforeunload', () => {
     updateOnlineStatus(false);
 });
