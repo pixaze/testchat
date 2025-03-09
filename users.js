@@ -8,7 +8,8 @@ import {
     where,
     orderBy,
     serverTimestamp,
-    updateDoc 
+    updateDoc,
+    addDoc // Ditambahkan untuk mengirim pesan
 } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-auth.js";
 
@@ -16,7 +17,7 @@ let currentUser = null;
 let contextMenuUser = null;
 let showOnlineOnly = false;
 let searchTerm = '';
-let unreadCounts = {}; // Objek untuk menyimpan jumlah pesan yang belum dibaca per pengguna
+let unreadCounts = {}; // Ditambahkan untuk melacak pesan yang belum dibaca
 
 // Check authentication status
 onAuthStateChanged(auth, async (user) => {
@@ -27,7 +28,7 @@ onAuthStateChanged(auth, async (user) => {
             updateOnlineStatus(true);
             initializeUsers();
             setupSearch();
-            loadUnreadMessages(); // Tambahkan untuk memuat pesan yang belum dibaca
+            loadUnreadMessages(); // Ditambahkan untuk memuat pesan yang belum dibaca
         } else {
             window.location.href = "/";
         }
@@ -43,35 +44,12 @@ function initializeUsers() {
     setupContextMenu();
 }
 
-// Load unread messages count
-function loadUnreadMessages() {
-    const q = query(
-        collection(db, "messages"),
-        where("participants", "array-contains", currentUser.uid),
-        where("read", "==", false) // Hanya pesan yang belum dibaca
-    );
-
-    onSnapshot(q, (snapshot) => {
-        unreadCounts = {}; // Reset hitungan
-        snapshot.forEach(doc => {
-            const message = doc.data();
-            const otherUserId = message.participants.find(id => id !== currentUser.uid);
-            if (otherUserId && message.sender !== currentUser.uid) { // Hanya hitung pesan dari orang lain
-                unreadCounts[otherUserId] = (unreadCounts[otherUserId] || 0) + 1;
-            }
-        });
-        // Perbarui tampilan setelah hitungan diperbarui
-        loadActiveUsers();
-        loadAllUsers();
-    });
-}
-
 // Load active users (users with recent messages)
 function loadActiveUsers() {
     const activeUsersDiv = document.getElementById("active-users");
     const q = query(
         collection(db, "messages"),
-        where("participants", "array-contains", currentUser.uid),
+        where("receiver", "==", currentUser.uid), // Diganti dari participants ke receiver
         orderBy("timestamp", "desc")
     );
 
@@ -81,7 +59,7 @@ function loadActiveUsers() {
 
         snapshot.forEach(doc => {
             const message = doc.data();
-            const otherUserId = message.participants.find(id => id !== currentUser.uid);
+            const otherUserId = message.sender; // Menggunakan sender sebagai pengganti otherUserId
             if (otherUserId && !activeUsers.has(otherUserId)) {
                 activeUsers.add(otherUserId);
                 activeUserPromises.push(getDoc(doc(db, "users", otherUserId)));
@@ -99,6 +77,8 @@ function loadActiveUsers() {
         });
 
         document.getElementById("active-count").textContent = activeUsers.size;
+    }, (error) => {
+        console.error("Error loading active users:", error); // Debugging
     });
 }
 
@@ -133,6 +113,33 @@ function loadAllUsers() {
         });
 
         document.getElementById("total-count").textContent = totalCount;
+    }, (error) => {
+        console.error("Error loading all users:", error); // Debugging
+    });
+}
+
+// Load unread messages count
+function loadUnreadMessages() {
+    const q = query(
+        collection(db, "messages"),
+        where("receiver", "==", currentUser.uid) // Hanya pesan yang diterima oleh pengguna saat ini
+    );
+
+    onSnapshot(q, (snapshot) => {
+        unreadCounts = {}; // Reset hitungan
+        snapshot.forEach(doc => {
+            const message = doc.data();
+            const senderId = message.sender;
+            const isUnread = message.read === undefined || message.read === false; // Fleksibel untuk data lama
+            if (senderId !== currentUser.uid && isUnread) {
+                unreadCounts[senderId] = (unreadCounts[senderId] || 0) + 1;
+            }
+        });
+        console.log("Unread Counts:", unreadCounts); // Debugging
+        loadActiveUsers(); // Perbarui tampilan
+        loadAllUsers();
+    }, (error) => {
+        console.error("Error loading unread messages:", error); // Debugging
     });
 }
 
@@ -150,7 +157,7 @@ function createUserElement(user, userId, container) {
         <div class="user-avatar">
             <img src="${user.avatar || 'https://i.ibb.co.com/99yLXMCw/IMG-20250216-180931-441.jpg'}" alt="avatar" class="avatar">
             <span class="status-indicator ${user.online ? 'online' : 'offline'}"></span>
-            ${notificationHtml} <!-- Tambahkan notifikasi di sini -->
+            ${notificationHtml} <!-- Ditambahkan untuk notifikasi -->
         </div>
         <div class="user-info">
             <div class="username-container">
@@ -176,7 +183,7 @@ function createUserElement(user, userId, container) {
     container.appendChild(div);
 }
 
-// Get verification badges HTML (tanpa perubahan)
+// Get verification badges HTML (Tidak diubah)
 function getVerificationBadges(user) {
     let badges = '';
     if (user.veriai) {
@@ -189,7 +196,7 @@ function getVerificationBadges(user) {
     }
 
     if (user.verifiedvip) {
-        badges += `<span class="verified-badge"><svg id="verifiedvip" width="16" height="16" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+        badges += `<span class="verified-badge"><svg id="verifiedvip" width="40" height="40" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
             <defs>
                 <linearGradient id="gold-gradient" x1="4" y1="2" x2="36" y2="38" gradientUnits="userSpaceOnUse">
                     <stop offset="0%" stop-color="#f4e72a"/>
@@ -208,10 +215,11 @@ function getVerificationBadges(user) {
             <path d="M27.413 14.319l2.254 2.287-11.43 11.5-6.835-6.93 2.244-2.258 4.587 4.581 9.18-9.18Z" fill="white"/>
         </svg></span>`;
     }
+
     return badges;
 }
 
-// Format last seen time (tanpa perubahan)
+// Format last seen time (Tidak diubah)
 function formatLastSeen(timestamp) {
     if (!timestamp) return 'a while ago';
 
@@ -225,7 +233,7 @@ function formatLastSeen(timestamp) {
     return lastSeen.toLocaleDateString();
 }
 
-// Update online status (tanpa perubahan)
+// Update online status (Tidak diubah)
 async function updateOnlineStatus(online) {
     if (!currentUser) return;
 
@@ -236,7 +244,7 @@ async function updateOnlineStatus(online) {
     });
 }
 
-// Setup search functionality (tanpa perubahan)
+// Setup search functionality (Tidak diubah)
 function setupSearch() {
     const searchInput = document.getElementById("user-search");
     searchInput.addEventListener('input', (e) => {
@@ -245,7 +253,7 @@ function setupSearch() {
     });
 }
 
-// Toggle online filter (tanpa perubahan)
+// Toggle online filter (Tidak diubah)
 window.toggleOnlineFilter = () => {
     const filterBtn = document.getElementById("online-filter");
     showOnlineOnly = !showOnlineOnly;
@@ -253,7 +261,7 @@ window.toggleOnlineFilter = () => {
     loadAllUsers();
 };
 
-// Check if user should be shown based on filters (tanpa perubahan)
+// Check if user should be shown based on filters (Tidak diubah)
 function shouldShowUser(user) {
     const matchesSearch = user.username.toLowerCase().includes(searchTerm) ||
                          (user.bio && user.bio.toLowerCase().includes(searchTerm));
@@ -261,7 +269,7 @@ function shouldShowUser(user) {
     return matchesSearch && matchesOnlineFilter;
 }
 
-// Context menu functionality (tanpa perubahan)
+// Context menu functionality (Tidak diubah)
 function setupContextMenu() {
     const menu = document.getElementById("user-context-menu");
     document.addEventListener('click', () => {
@@ -282,7 +290,7 @@ window.showContextMenu = (event, userId) => {
     menu.style.display = 'block';
 };
 
-// Handle context menu actions (tanpa perubahan)
+// Handle context menu actions (Tidak diubah)
 document.querySelectorAll('.menu-item').forEach(item => {
     item.addEventListener('click', async () => {
         if (!contextMenuUser) return;
@@ -302,12 +310,32 @@ document.querySelectorAll('.menu-item').forEach(item => {
     });
 });
 
-// Start chat with selected user (tanpa perubahan)
+// Start chat with selected user (Diperbarui dengan opsi pengiriman pesan)
 window.startChat = (userId) => {
     window.location.href = `chat?user=${userId}`;
+    // Untuk testing, uncomment baris berikut untuk mengirim pesan dummy
+    // sendMessage(userId, "Hello, this is a test message!");
 };
 
-// Logout functionality (tanpa perubahan)
+// Function to send a message with required fields
+async function sendMessage(receiverId, text) {
+    try {
+        const messageData = {
+            sender: currentUser.uid,
+            receiver: receiverId,
+            text: text,
+            timestamp: serverTimestamp(),
+            read: false, // Ditambahkan untuk status belum dibaca
+            participants: [currentUser.uid, receiverId] // Ditambahkan untuk konsistensi
+        };
+        await addDoc(collection(db, "messages"), messageData);
+        console.log("Message sent successfully:", messageData);
+    } catch (error) {
+        console.error("Error sending message:", error);
+    }
+}
+
+// Logout functionality (Tidak diubah)
 window.logout = async () => {
     try {
         await updateOnlineStatus(false);
@@ -318,7 +346,7 @@ window.logout = async () => {
     }
 };
 
-// Update online status when window closes (tanpa perubahan)
+// Update online status when window closes (Tidak diubah)
 window.addEventListener('beforeunload', () => {
     updateOnlineStatus(false);
 });
