@@ -189,7 +189,7 @@ function getVerificationBadges(user) {
     }
 
     if (user.verifiedvip) {
-        badges += `<span class="verified-badge"><svg id="verifiedvip" width="40" height="40" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+        badges += `<span class="verified-badge"><svg id="verifiedvip" width="16" height="16" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
             <defs>
                 <linearGradient id="gold-gradient" x1="4" y1="2" x2="36" y2="38" gradientUnits="userSpaceOnUse">
                     <stop offset="0%" stop-color="#f4e72a"/>
