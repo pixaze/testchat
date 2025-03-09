@@ -4,8 +4,338 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Users - Chat App</title>
-    <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        :root {
+            --primary-color: #40c4ff;
+            --secondary-color: #2d3b45;
+            --text-primary: #ffffff;
+            --text-secondary: #b0bec5;
+            --background: linear-gradient(135deg, #1e272e 0%, #263238 100%);
+            --sent-message: linear-gradient(90deg, #81d4fa, #4dabf7);
+            --received-message: linear-gradient(90deg, #546e7a, #455a64);
+            --online: #00e676;
+            --offline: #90a4ae;
+            --accent: #80deea;
+            --glass-bg: rgba(255, 255, 255, 0.05);
+            --shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            --notification-bg: #ff4444; /* Warna merah untuk notifikasi */
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', 'Arial', sans-serif;
+            background: var(--background);
+            color: var(--text-primary);
+            height: 100%;
+            overflow: auto;
+            line-height: 1.6;
+        }
+
+        .users-container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            padding-top: 90px;
+            padding-bottom: 100px;
+            position: relative;
+            min-height: 100vh;
+        }
+
+        .header-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 20px;
+            background: linear-gradient(90deg, var(--secondary-color), #37474f);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: var(--shadow);
+            position: fixed;
+            top: 0;
+            width: calc(900px - 2px);
+            max-width: calc(100% - 2px);
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 2;
+            border-radius: 0 0 15px 15px;
+        }
+
+        .search-bar {
+            display: flex;
+            align-items: center;
+            flex-grow: 1;
+            background: var(--glass-bg);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 30px;
+            padding: 10px 15px;
+            margin-right: 15px;
+            transition: all 0.3s ease;
+        }
+
+        .search-bar:hover, .search-bar:focus-within {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 10px rgba(64, 196, 255, 0.2);
+        }
+
+        .search-bar i {
+            color: var(--text-secondary);
+            margin-right: 10px;
+            font-size: 16px;
+        }
+
+        #user-search {
+            background: transparent;
+            border: none;
+            color: var(--text-primary);
+            outline: none;
+            width: 100%;
+            font-size: 15px;
+            font-weight: 300;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 12px;
+        }
+
+        .filter-btn, .logout-btn {
+            background: var(--primary-color);
+            border: none;
+            color: #fff;
+            padding: 10px 15px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.3s ease;
+        }
+
+        .filter-btn.active {
+            background: var(--accent);
+            transform: scale(1.05);
+        }
+
+        .filter-btn:hover, .logout-btn:hover {
+            background: linear-gradient(90deg, #33aacc, var(--primary-color));
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(64, 196, 255, 0.3);
+        }
+
+        .users-section {
+            margin-top: 25px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(8px);
+            border-radius: 15px;
+            padding: 15px;
+            box-shadow: var(--shadow);
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .section-header h2 {
+            font-size: 20px;
+            font-weight: 600;
+            color: var(--text-primary);
+            letter-spacing: 0.5px;
+        }
+
+        .section-badge {
+            background: var(--primary-color);
+            color: #fff;
+            padding: 4px 10px;
+            border-radius: 15px;
+            margin-left: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .user-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .user {
+            display: flex;
+            align-items: center;
+            padding: 12px 15px;
+            background: var(--secondary-color);
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative; /* Untuk posisi notifikasi */
+        }
+
+        .user:hover {
+            transform: translateY(-3px);
+            background: linear-gradient(90deg, #37474f, #455a64);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .user-avatar {
+            position: relative;
+            margin-right: 15px;
+        }
+
+        .avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid var(--accent);
+            transition: transform 0.3s ease;
+        }
+
+        .user:hover .avatar {
+            transform: scale(1.05);
+        }
+
+        .status-indicator {
+            position: absolute;
+            bottom: 2px;
+            right: 2px;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            border: 2px solid var(--background);
+            background: var(--offline);
+            transition: background 0.3s ease;
+        }
+
+        .status-indicator.online {
+            background: var(--online);
+            box-shadow: 0 0 8px rgba(0, 230, 118, 0.5);
+        }
+
+        .unread-notification {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background: var(--notification-bg);
+            color: #fff;
+            font-size: 12px;
+            font-weight: 600;
+            padding: 4px 8px;
+            border-radius: 12px;
+            min-width: 20px;
+            text-align: center;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
+        .user-info {
+            flex-grow: 1;
+        }
+
+        .username-container {
+            display: flex;
+            align-items: center;
+            margin-bottom: 4px;
+        }
+
+        .username {
+            font-weight: 600;
+            font-size: 17px;
+            color: var(--text-primary);
+            letter-spacing: 0.3px;
+        }
+
+        .verified-badge {
+            margin-left: 8px;
+            display: inline-flex;
+            align-items: center;
+        }
+
+        .user-status {
+            font-size: 13px;
+            color: var(--text-secondary);
+            font-weight: 300;
+        }
+
+        .user-bio {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-top: 3px;
+            font-style: italic;
+        }
+
+        .navigation-bar {
+            display: flex;
+            justify-content: space-around;
+            padding: 15px 20px;
+            background: linear-gradient(90deg, var(--secondary-color), #37474f);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: var(--shadow);
+            position: fixed;
+            bottom: 25px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: calc(900px - 40px);
+            max-width: calc(100% - 40px);
+            border-radius: 20px;
+            z-index: 2;
+        }
+
+        .nav-btn {
+            background: var(--primary-color);
+            border: none;
+            color: #fff;
+            padding: 12px 20px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .nav-btn:hover {
+            background: linear-gradient(90deg, #33aacc, var(--primary-color));
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(64, 196, 255, 0.3);
+        }
+
+        @media (max-width: 600px) {
+            .users-container {
+                padding: 15px;
+                padding-top: 80px;
+                padding-bottom: 90px;
+            }
+
+            .header-container, .navigation-bar {
+                width: calc(100% - 30px);
+                max-width: none;
+            }
+
+            .nav-btn {
+                padding: 10px 15px;
+                font-size: 14px;
+            }
+        }
+    </style>
 </head>
 <body data-theme="system">
     <div class="users-container">
@@ -40,7 +370,7 @@
             <div id="user-list" class="user-list"></div>
         </div>
 
-        <nav class="navigation-bar">
+        <div class="navigation-bar">
             <button onclick="window.location.href='feed.html'" class="nav-btn">
                 <i class="fas fa-rss"></i> Feed
             </button>
@@ -53,10 +383,11 @@
             <button onclick="window.location.href='settings.html'" class="nav-btn">
                 <i class="fas fa-cog"></i> Settings
             </button>
-        </nav>
+        </div>
     </div>
 
     <script type="module" src="firebase-config.js"></script>
     <script type="module" src="users.js"></script>
+    <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'91db2126197112da',t:'MTc0MTUyOTE1MC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script>
 </body>
 </html>
