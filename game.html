@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tic-Tac-Toe Modern</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: linear-gradient(135deg, #1a1a1a, #2b2b2b);
+            color: #fff;
+            text-align: center;
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            overflow: hidden;
+        }
+        .container {
+            background: linear-gradient(135deg, #222, #333);
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+            max-width: 450px;
+            margin: 0 auto;
+            position: relative;
+            animation: fadeIn 0.5s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        button {
+            padding: 12px 25px;
+            font-size: 1.1em;
+            background: linear-gradient(to right, #ff4444, #ff6666);
+            border: none;
+            color: white;
+            cursor: pointer;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(255, 68, 68, 0.5);
+            transition: transform 0.3s, background 0.3s;
+            margin: 5px;
+        }
+        button:hover {
+            transform: scale(1.05);
+            background: linear-gradient(to right, #cc3333, #ff4444);
+        }
+        button:active {
+            transform: scale(0.95);
+        }
+        input {
+            padding: 10px;
+            font-size: 1em;
+            border: none;
+            border-radius: 5px;
+            margin: 5px;
+            background: #444;
+            color: #fff;
+            outline: none;
+            transition: box-shadow 0.3s;
+        }
+        input:focus {
+            box-shadow: 0 0 10px #ff6666;
+        }
+        .board {
+            display: grid;
+            grid-template-columns: repeat(3, 110px);
+            gap: 10px;
+            margin: 20px auto;
+            width: 340px;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 10px;
+            border-radius: 10px;
+        }
+        .cell {
+            width: 110px;
+            height: 110px;
+            background: linear-gradient(135deg, #fff, #f0f0f0);
+            color: #333;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.5em;
+            cursor: pointer;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+            transition: transform 0.2s, background 0.3s;
+        }
+        .cell:hover {
+            background: linear-gradient(135deg, #f0f0f0, #e0e0e0);
+            transform: scale(1.05);
+        }
+        .cell:active {
+            transform: scale(0.95);
+        }
+        #status {
+            font-size: 1.5em;
+            margin: 15px 0;
+            color: #ffcc00;
+            text-shadow: 1px 1px 5px rgba(255, 204, 0, 0.5);
+            animation: pulse 1.5s infinite;
+        }
+        #room-code-display {
+            font-size: 1.2em;
+            margin-bottom: 10px;
+            color: #00ccff;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 5px 10px;
+            border-radius: 5px;
+            display: none;
+        }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+        #join-form {
+            margin-top: 15px;
+            animation: slideIn 0.5s ease-out;
+        }
+        @keyframes slideIn {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div id="menu">
+            <button id="create-room">Buat Ruangan</button>
+            <button id="join-room">Gabung Ruangan</button>
+            <div id="join-form" style="display: none;">
+                <input type="text" id="room-code" placeholder="Masukkan kode ruangan">
+                <button id="join-submit">Gabung</button>
+            </div>
+        </div>
+        <div id="game" style="display: none;">
+            <div id="room-code-display"></div>
+            <div id="status"></div>
+            <div class="board">
+                <div class="cell" id="cell-0"></div>
+                <div class="cell" id="cell-1"></div>
+                <div class="cell" id="cell-2"></div>
+                <div class="cell" id="cell-3"></div>
+                <div class="cell" id="cell-4"></div>
+                <div class="cell" id="cell-5"></div>
+                <div class="cell" id="cell-6"></div>
+                <div class="cell" id="cell-7"></div>
+                <div class="cell" id="cell-8"></div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        // Impor modul Firebase
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js";
+        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-auth.js";
+        import { getFirestore, collection, doc, setDoc, getDoc, updateDoc, onSnapshot, query, where, getDocs } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js";
+
+        // Konfigurasi Firebase
+        const firebaseConfig = {
+            apiKey: "AIzaSyDTOeU-9s8Ope48ce7QtcYKTYl0dwONZiQ",
+            authDomain: "tosha-lup.firebaseapp.com",
+            projectId: "tosha-lup",
+            storageBucket: "tosha-lup.firebasestorage.app",
+            messagingSenderId: "516568752534",
+            appId: "1:516568752534:web:02096798fe8d2c5bac3db7"
+        };
+
+        // Inisialisasi Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // Variabel global
+        let currentRoomCode;
+        let unsubscribe;
+
+        // Kombinasi pemenang Tic-Tac-Toe
+        const winningCombinations = [
+            [0, 1, 2], [3, 4, 5], [6, 7, 8], // Baris
+            [0, 3, 6], [1, 4, 7], [2, 5, 8], // Kolom
+            [0, 4, 8], [2, 4, 6]             // Diagonal
+        ];
+
+        // Cek status autentikasi
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                document.getElementById('menu').style.display = 'block';
+            } else {
+                window.location.href = 'index.html'; // Redirect ke login
+            }
+        });
+
+        // Tombol buat ruangan
+        document.getElementById('create-room').addEventListener('click', async () => {
+            const code = await generateUniqueCode();
+            const roomRef = doc(db, "rooms", code);
+            await setDoc(roomRef, {
+                code,
+                playerX: auth.currentUser.uid,
+                playerO: null,
+                board: Array(9).fill(null),
+                turn: 'X',
+                winner: null,
+                createdAt: new Date(),
+                status: 'waiting'
+            });
+            currentRoomCode = code;
+            document.getElementById('menu').style.display = 'none';
+            document.getElementById('game').style.display = 'block';
+            document.getElementById('room-code-display').style.display = 'block';
+            document.getElementById('room-code-display').textContent = `Kode Ruangan: ${code}`;
+            document.getElementById('status').textContent = `Menunggu lawan...`;
+            listenToRoom(code);
+        });
+
+        // Tombol gabung ruangan
+        document.getElementById('join-room').addEventListener('click', () => {
+            document.getElementById('join-form').style.display = 'block';
+        });
+
+        // Submit kode ruangan
+        document.getElementById('join-submit').addEventListener('click', async () => {
+            const code = document.getElementById('room-code').value.toUpperCase();
+            const roomRef = doc(db, "rooms", code);
+            const roomSnap = await getDoc(roomRef);
+            if (!roomSnap.exists()) {
+                alert("Ruangan tidak ditemukan");
+                return;
+            }
+            const roomData = roomSnap.data();
+            if (roomData.playerO) {
+                alert("Ruangan sudah penuh");
+                return;
+            }
+            await updateDoc(roomRef, { playerO: auth.currentUser.uid, status: 'playing' });
+            currentRoomCode = code;
+            document.getElementById('menu').style.display = 'none';
+            document.getElementById('game').style.display = 'block';
+            document.getElementById('room-code-display').style.display = 'block';
+            document.getElementById('room-code-display').textContent = `Kode Ruangan: ${code}`;
+            listenToRoom(code);
+        });
+
+        // Generate kode unik
+        async function generateUniqueCode() {
+            let code;
+            let exists = true;
+            while (exists) {
+                code = Math.random().toString(36).substring(2, 8).toUpperCase();
+                const querySnapshot = await getDocs(query(collection(db, "rooms"), where("code", "==", code)));
+                exists = !querySnapshot.empty;
+            }
+            return code;
+        }
+
+        // Dengarkan perubahan di ruangan
+        function listenToRoom(code) {
+            const roomRef = doc(db, "rooms", code);
+            unsubscribe = onSnapshot(roomRef, (doc) => {
+                const roomData = doc.data();
+                updateUI(roomData);
+            });
+        }
+
+        // Perbarui UI berdasarkan data ruangan
+        function updateUI(roomData) {
+            const playerSymbol = auth.currentUser.uid === roomData.playerX ? 'X' : 'O';
+            const status = document.getElementById('status');
+
+            if (!roomData.playerO) {
+                status.textContent = `Menunggu lawan...`;
+            } else if (roomData.winner) {
+                if (roomData.winner === 'draw') {
+                    status.textContent = "Permainan seri!";
+                } else {
+                    status.textContent = `${roomData.winner} menang!`;
+                }
+            } else {
+                status.textContent = `Giliran: ${roomData.turn}`;
+            }
+
+            // Perbarui papan
+            roomData.board.forEach((value, index) => {
+                document.getElementById(`cell-${index}`).textContent = value || '';
+            });
+
+            // Aktifkan klik jika giliran pemain dan permainan belum selesai
+            const isMyTurn = roomData.turn === playerSymbol && !roomData.winner && roomData.playerO;
+            document.querySelectorAll('.cell').forEach((cell, index) => {
+                cell.onclick = isMyTurn && !roomData.board[index] ? () => makeMove(index) : null;
+            });
+        }
+
+        // Lakukan langkah permainan
+        async function makeMove(index) {
+            const roomRef = doc(db, "rooms", currentRoomCode);
+            const roomSnap = await getDoc(roomRef);
+            const roomData = roomSnap.data();
+            if (roomData.winner || roomData.turn !== (auth.currentUser.uid === roomData.playerX ? 'X' : 'O') || roomData.board[index]) return;
+
+            const newBoard = [...roomData.board];
+            newBoard[index] = auth.currentUser.uid === roomData.playerX ? 'X' : 'O';
+            const newTurn = roomData.turn === 'X' ? 'O' : 'X';
+            await updateDoc(roomRef, {
+                board: newBoard,
+                turn: newTurn
+            });
+
+            const winner = checkWinner(newBoard);
+            if (winner) {
+                await updateDoc(roomRef, { winner });
+            } else if (newBoard.every(cell => cell)) {
+                await updateDoc(roomRef, { winner: 'draw' });
+            }
+        }
+
+        // Cek pemenang
+        function checkWinner(board) {
+            for (const combo of winningCombinations) {
+                const [a, b, c] = combo;
+                if (board[a] && board[a] === board[b] && board[a] === board[c]) {
+                    return board[a];
+                }
+            }
+            return null;
+        }
+    </script>
+</body>
+</html>
