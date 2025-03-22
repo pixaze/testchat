@@ -237,4 +237,4 @@ document.head.appendChild(style);
 setTimeout(() => {
     document.querySelector('.preloader').style.display = 'none';
     document.querySelector('.wrapper').classList.remove('hidden');
-}, 1500);
+}, 3000);
