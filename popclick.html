@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>This is my girl</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            min-height: 100vh;
+            background: linear-gradient(135deg, #1e1e2f, #2a2a40);
+            font-family: 'Arial', sans-serif;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .container {
+            position: absolute;
+            bottom: 200px;
+            left: 0;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            z-index: 10;
+            pointer-events: none; /* Tidak mengganggu klik di bawahnya */
+        }
+
+        h1 {
+            font-size: 4rem;
+            color: rgba(255, 255, 255, 0.85);
+            text-shadow: 0 0 15px rgba(255, 255, 255, 0.5), 0 0 30px rgba(255, 255, 255, 0.3);
+            animation: bounce 0.3s ease infinite alternate;
+        }
+
+        #popcat {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            max-width: 959px;
+            max-height: 1280px;
+            margin: auto;
+            left: 50%;
+            transform: translateX(-50%);
+            cursor: pointer;
+            user-select: none;
+            transition: transform 0.1s ease, filter 0.2s ease;
+            z-index: 1;
+        }
+
+        #popcat:active {
+            transform: translateX(-50%) scale(0.98);
+            filter: brightness(1.1) saturate(1.2);
+        }
+
+        /* Partikel */
+        .particle {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background: radial-gradient(circle, rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0));
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 5;
+            animation: particleFade 1s ease-out forwards;
+        }
+
+        @keyframes particleFade {
+            0% { opacity: 1; transform: scale(1) translate(0, 0); }
+            100% { opacity: 0; transform: scale(0.5) translate(var(--x), var(--y)); }
+        }
+
+        /* Koin (menggunakan emoji) */
+        .coin {
+            position: absolute;
+            font-size: 50px; /* Ukuran emoji */
+            width: 50px;
+            height: 50px;
+            line-height: 50px;
+            text-align: center;
+            cursor: pointer;
+            z-index: 15; /* Pastikan di atas gambar */
+            animation: fall 4s linear forwards;
+            user-select: none;
+        }
+
+        @keyframes fall {
+            0% { top: -50px; opacity: 1; }
+            100% { top: 100%; opacity: 0.5; }
+        }
+
+        @keyframes bounce {
+            0% { transform: translateY(0); }
+            100% { transform: translateY(-10px); }
+        }
+
+        /* Responsif */
+        @media (max-width: 959px) {
+            #popcat {
+                width: 100%;
+                height: auto;
+            }
+            h1 {
+                font-size: 2.5rem;
+            }
+            .coin {
+                font-size: 40px;
+                width: 40px;
+                height: 40px;
+                line-height: 40px;
+            }
+        }
+
+        @media (max-height: 1280px) {
+            #popcat {
+                height: 100%;
+                width: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Score: <span id="score">0</span></h1>
+    </div>
+    <img id="popcat" src="https://dl.dropboxusercontent.com/scl/fi/bgjurmpluskd34jzm372d/image1.jpg?rlkey=1xxztgxfw79zm6ec9s2keiu49&st=5mr3srut&dl=0" alt="PopCat">
+
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const popcat = document.getElementById("popcat");
+            const scoreDisplay = document.getElementById("score");
+            const body = document.body;
+            let score = 0;
+            let multiplier = 1;
+
+            const image1 = "https://dl.dropboxusercontent.com/scl/fi/dh14amcs2dnvz55ssqewo/image.jpg?rlkey=ptyebveo7vuiay8b5quhs8csz&st=9iz9lk55&dl=0"; // Saat diklik
+            const image2 = "https://dl.dropboxusercontent.com/scl/fi/bgjurmpluskd34jzm372d/image1.jpg?rlkey=1xxztgxfw79zm6ec9s2keiu49&st=5mr3srut&dl=0"; // Awal
+
+            // Fungsi untuk menambah skor dan partikel
+            const handlePress = (e) => {
+                popcat.src = image1;
+                score += multiplier;
+                scoreDisplay.textContent = score;
+
+                // Tambah partikel di posisi klik
+                const particle = document.createElement("div");
+                particle.classList.add("particle");
+                const x = e.clientX || e.touches[0].clientX;
+                const y = e.clientY || e.touches[0].clientY;
+                particle.style.left = `${x}px`;
+                particle.style.top = `${y}px`;
+                particle.style.setProperty('--x', `${Math.random() * 100 - 50}px`);
+                particle.style.setProperty('--y', `${Math.random() * 100 - 50}px`);
+                body.appendChild(particle);
+                setTimeout(() => particle.remove(), 1000);
+            };
+
+            const handleRelease = () => {
+                popcat.src = image2;
+            };
+
+            // Event untuk klik mouse di seluruh layar
+            body.addEventListener("mousedown", handlePress);
+            body.addEventListener("mouseup", handleRelease);
+
+            // Event untuk sentuhan di seluruh layar (mobile)
+            body.addEventListener("touchstart", (e) => {
+                e.preventDefault();
+                handlePress(e);
+            });
+
+            body.addEventListener("touchend", (e) => {
+                e.preventDefault();
+                handleRelease();
+            });
+
+            // Mencegah menu konteks
+            body.addEventListener("contextmenu", (e) => e.preventDefault());
+
+            // Fungsi untuk spawn koin
+            const spawnCoin = () => {
+                const coin = document.createElement("div");
+                coin.classList.add("coin");
+                coin.textContent = "🪙"; // Emoji koin
+                const randomX = Math.random() * (window.innerWidth - 50);
+                coin.style.left = `${randomX}px`;
+                body.appendChild(coin);
+
+                // Event saat koin diklik
+                coin.addEventListener("click", () => {
+                    multiplier = 3; // Skor 5x
+                    coin.remove();
+                    setTimeout(() => {
+                        multiplier = 1; // Kembali ke 1x setelah 10 detik
+                    }, 5000);
+                });
+
+                coin.addEventListener("touchstart", (e) => {
+                    e.preventDefault();
+                    multiplier = 3;
+                    coin.remove();
+                    setTimeout(() => {
+                        multiplier = 1;
+                    }, 10000);
+                });
+
+                // Hapus koin setelah animasi jatuh selesai
+                setTimeout(() => {
+                    if (coin.parentNode) coin.remove();
+                }, 4000);
+            };
+
+            // Spawn koin setiap 60 detik
+            setInterval(spawnCoin, 15000);
+            spawnCoin(); // Spawn koin pertama langsung
+        });
+    </script>
+</body>
+</html>
