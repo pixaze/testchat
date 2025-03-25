@@ -9,6 +9,8 @@
             margin: 0;
             padding: 0;
             box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent; /* Mencegah highlight biru */
+            -webkit-touch-callout: none; /* Mencegah menu kontekstual di iOS */
         }
 
         body {
@@ -38,28 +40,29 @@
             animation: bounce 0.3s ease infinite alternate;
         }
 
-        #popcat {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            max-width: 959px;
-            max-height: 1280px;
-            margin: auto;
-            left: 50%;
-            transform: translateX(-50%);
-            cursor: pointer;
-            user-select: none;
-            transition: transform 0.1s ease, filter 0.2s ease;
-            z-index: 1;
-        }
+           #popcat {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        max-width: 959px;
+        max-height: 1280px;
+        margin: auto;
+        left: 50%;
+        transform: translateX(-50%);
+        cursor: pointer;
+        user-select: none;
+        transition: filter 0.2s ease;
+        z-index: 1;
+        -webkit-tap-highlight-color: transparent;
+        -webkit-touch-callout: none;
+    }
 
-        #popcat:active {
-            transform: translateX(-50%) scale(0.98);
-            filter: brightness(1.1) saturate(1.2);
-        }
+    #popcat:active {
+        filter: brightness(1.1) saturate(1.2);
+    }
 
         /* Partikel */
         .particle {
