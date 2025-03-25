@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>This is my girl</title>
+    <title>PopCat Clone</title>
     <style>
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
-            -webkit-tap-highlight-color: transparent; /* Mencegah highlight biru */
-            -webkit-touch-callout: none; /* Mencegah menu kontekstual di iOS */
+            -webkit-tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
         }
 
         body {
@@ -23,14 +23,14 @@
 
         .container {
             position: absolute;
-            bottom: 200px;
+            bottom: 150px;
             left: 0;
             width: 100%;
             display: flex;
             justify-content: center;
             align-items: flex-start;
             z-index: 10;
-            pointer-events: none; /* Tidak mengganggu klik di bawahnya */
+            pointer-events: none;
         }
 
         h1 {
@@ -40,31 +40,31 @@
             animation: bounce 0.3s ease infinite alternate;
         }
 
-           #popcat {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-        max-width: 959px;
-        max-height: 1280px;
-        margin: auto;
-        left: 50%;
-        transform: translateX(-50%);
-        cursor: pointer;
-        user-select: none;
-        transition: filter 0.2s ease;
-        z-index: 1;
-        -webkit-tap-highlight-color: transparent;
-        -webkit-touch-callout: none;
-    }
+        #popcat {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            max-width: 959px;
+            max-height: 1280px;
+            margin: auto;
+            left: 50%;
+            transform: translateX(-50%);
+            cursor: pointer;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+            transition: filter 0.2s ease;
+            z-index: 1;
+        }
 
-    #popcat:active {
-        filter: brightness(1.1) saturate(1.2);
-    }
+        #popcat:active {
+            filter: brightness(1.1) saturate(1.2);
+        }
 
-        /* Partikel */
         .particle {
             position: absolute;
             width: 10px;
@@ -76,23 +76,22 @@
             animation: particleFade 1s ease-out forwards;
         }
 
-        @keyframes particleFade {
-            0% { opacity: 1; transform: scale(1) translate(0, 0); }
-            100% { opacity: 0; transform: scale(0.5) translate(var(--x), var(--y)); }
-        }
-
-        /* Koin (menggunakan emoji) */
         .coin {
             position: absolute;
-            font-size: 50px; /* Ukuran emoji */
+            font-size: 50px;
             width: 50px;
             height: 50px;
             line-height: 50px;
             text-align: center;
             cursor: pointer;
-            z-index: 15; /* Pastikan di atas gambar */
+            z-index: 15;
             animation: fall 4s linear forwards;
             user-select: none;
+        }
+
+        @keyframes particleFade {
+            0% { opacity: 1; transform: scale(1) translate(0, 0); }
+            100% { opacity: 0; transform: scale(0.5) translate(var(--x), var(--y)); }
         }
 
         @keyframes fall {
@@ -105,7 +104,6 @@
             100% { transform: translateY(-10px); }
         }
 
-        /* Responsif */
         @media (max-width: 959px) {
             #popcat {
                 width: 100%;
@@ -147,13 +145,11 @@
             const image1 = "https://dl.dropboxusercontent.com/scl/fi/dh14amcs2dnvz55ssqewo/image.jpg?rlkey=ptyebveo7vuiay8b5quhs8csz&st=9iz9lk55&dl=0"; // Saat diklik
             const image2 = "https://dl.dropboxusercontent.com/scl/fi/bgjurmpluskd34jzm372d/image1.jpg?rlkey=1xxztgxfw79zm6ec9s2keiu49&st=5mr3srut&dl=0"; // Awal
 
-            // Fungsi untuk menambah skor dan partikel
             const handlePress = (e) => {
                 popcat.src = image1;
                 score += multiplier;
                 scoreDisplay.textContent = score;
 
-                // Tambah partikel di posisi klik
                 const particle = document.createElement("div");
                 particle.classList.add("particle");
                 const x = e.clientX || e.touches[0].clientX;
@@ -170,39 +166,36 @@
                 popcat.src = image2;
             };
 
-            // Event untuk klik mouse di seluruh layar
             body.addEventListener("mousedown", handlePress);
             body.addEventListener("mouseup", handleRelease);
 
-            // Event untuk sentuhan di seluruh layar (mobile)
             body.addEventListener("touchstart", (e) => {
                 e.preventDefault();
                 handlePress(e);
-            });
+            }, { passive: false });
 
             body.addEventListener("touchend", (e) => {
                 e.preventDefault();
                 handleRelease();
+            }, { passive: false });
+
+            document.addEventListener("contextmenu", (e) => {
+                e.preventDefault();
             });
 
-            // Mencegah menu konteks
-            body.addEventListener("contextmenu", (e) => e.preventDefault());
-
-            // Fungsi untuk spawn koin
             const spawnCoin = () => {
                 const coin = document.createElement("div");
                 coin.classList.add("coin");
-                coin.textContent = "🪙"; // Emoji koin
+                coin.textContent = "🪙";
                 const randomX = Math.random() * (window.innerWidth - 50);
                 coin.style.left = `${randomX}px`;
                 body.appendChild(coin);
 
-                // Event saat koin diklik
                 coin.addEventListener("click", () => {
-                    multiplier = 3; // Skor 5x
+                    multiplier = 3;
                     coin.remove();
                     setTimeout(() => {
-                        multiplier = 1; // Kembali ke 1x setelah 10 detik
+                        multiplier = 1;
                     }, 5000);
                 });
 
@@ -212,18 +205,16 @@
                     coin.remove();
                     setTimeout(() => {
                         multiplier = 1;
-                    }, 10000);
+                    }, 5000);
                 });
 
-                // Hapus koin setelah animasi jatuh selesai
                 setTimeout(() => {
                     if (coin.parentNode) coin.remove();
                 }, 4000);
             };
 
-            // Spawn koin setiap 60 detik
             setInterval(spawnCoin, 15000);
-            spawnCoin(); // Spawn koin pertama langsung
+            spawnCoin();
         });
     </script>
 </body>
