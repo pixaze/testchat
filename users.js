@@ -155,7 +155,7 @@ function createUserElement(user, userId, container) {
 
     div.innerHTML = `
         <div class="user-avatar">
-            <img src="${user.avatar || 'https://i.ibb.co.com/99yLXMCw/IMG-20250216-180931-441.jpg'}" alt="avatar" class="avatar">
+            <img src="${user.avatar || 'https://dl.dropboxusercontent.com/scl/fi/mwl69ngw90cpfjeu0vi0s/7bf0ecf8-65b2-459c-bce6-8a954d7d1685.png?rlkey=zfy328bggvbmrnvewfpgtlc01&st=rmkvj68e&dl=0'}" alt="avatar" class="avatar">
             <span class="status-indicator ${user.online ? 'online' : 'offline'}"></span>
             ${notificationHtml} <!-- Ditambahkan untuk notifikasi -->
         </div>
