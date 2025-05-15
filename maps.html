@@ -1,0 +1,198 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Konversi Koordinat ke Peta</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="min-h-screen bg-gradient-to-br from-blue-100 via-indigo-100 to-purple-100 flex items-center justify-center p-4 font-inter">
+    <div class="bg-white rounded-3xl shadow-2xl p-8 max-w-3xl w-full transform transition-all duration-300 hover:shadow-3xl">
+        <h1 class="text-4xl font-bold text-gray-900 mb-6 text-center bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600">Konversi Koordinat ke Peta</h1>
+        <div class="flex flex-col sm:flex-row gap-4 mb-6">
+            <input 
+                type="text" 
+                id="coordinates" 
+                placeholder="Masukkan koordinat (contoh: 43°15'41,5\"N, 76°49'3,3\"E atau 43°15'41\"N, 76°49'3\"E)" 
+                class="flex-1 p-4 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition duration-200 bg-gray-50"
+            >
+            <button 
+                onclick="showMap()" 
+                class="bg-gradient-to-r from-indigo-600 to-blue-600 text-white px-6 py-4 rounded-xl hover:from-indigo-700 hover:to-blue-700 transition duration-200 font-semibold"
+            >
+                Tampilkan
+            </button>
+        </div>
+        <div id="error" class="text-red-500 text-sm mb-4 hidden text-center"></div>
+        <div id="googleMapsLink" class="mb-4 text-center hidden">
+            <a href="#" target="_blank" class="text-indigo-600 hover:text-indigo-800 font-medium transition duration-200">Lihat di Google Maps</a>
+        </div>
+        <div id="map" class="h-[500px] w-full rounded-xl border border-gray-200 shadow-inner"></div>
+        <div id="address" class="mt-4 text-gray-700 text-center hidden">
+            <p class="font-semibold">Detail Alamat:</p>
+            <p id="addressText"></p>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        let map = null;
+        let marker = null;
+
+        function initMap(lat, lng) {
+            if (map) map.remove();
+            map = L.map('map').setView([lat, lng], 13);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            }).addTo(map);
+
+            if (marker) marker.remove();
+            marker = L.marker([lat, lng]).addTo(map)
+                .bindPopup(`Latitude: ${lat.toFixed(6)}<br>Longitude: ${lng.toFixed(6)}`)
+                .openPopup();
+
+            // Tampilkan link Google Maps
+            const googleMapsLink = document.getElementById('googleMapsLink');
+            googleMapsLink.classList.remove('hidden');
+            googleMapsLink.querySelector('a').href = `https://www.google.com/maps/place/${lat},${lng}`;
+
+            // Ambil detail alamat menggunakan Nominatim
+            fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`)
+                .then(response => response.json())
+                .then(data => {
+                    const addressDiv = document.getElementById('address');
+                    const addressText = document.getElementById('addressText');
+                    addressDiv.classList.remove('hidden');
+                    addressText.textContent = data.display_name || 'Alamat tidak ditemukan';
+                })
+                .catch(error => {
+                    console.log("Error fetching address:", error);
+                    const addressDiv = document.getElementById('address');
+                    const addressText = document.getElementById('addressText');
+                    addressDiv.classList.remove('hidden');
+                    addressText.textContent = 'Gagal memuat alamat';
+                });
+        }
+
+        function parseDMS(coord) {
+            // Regex fleksibel: menerima °/deg, '/`, "/'', spasi opsional, koma/titik, detik opsional
+            const dmsRegex = /^(\d+)[°\s]*(?:deg)?\s*(\d+)?(?:['`]\s*|\s*)(\d*(?:[,.]\d+)?)?\"?\s*([NSWE])$/i;
+            const cleanedCoord = coord.replace(/\s+/g, ' ').trim();
+            console.log("Parsing koordinat:", cleanedCoord);
+            const match = cleanedCoord.match(dmsRegex);
+            if (!match) {
+                console.log("Regex gagal untuk:", cleanedCoord);
+                return { error: "Format koordinat tidak valid. Pastikan format seperti: 43°15'41,5\"N atau 43°15'41\"N" };
+            }
+
+            const degrees = parseFloat(match[1]);
+            const minutes = match[2] ? parseFloat(match[2]) : 0;
+            // Konversi koma ke titik untuk detik, jika ada
+            let seconds = match[3] ? parseFloat(match[3].replace(',', '.')) : 0;
+            const direction = match[4].toUpperCase();
+
+            console.log("Hasil parse: degrees=", degrees, "minutes=", minutes, "seconds=", seconds, "direction=", direction);
+
+            // Validasi nilai
+            if (isNaN(degrees) || minutes >= 60 || seconds >= 60) {
+                console.log("Validasi gagal: degrees=", degrees, "minutes=", minutes, "seconds=", seconds);
+                return { error: "Nilai derajat, menit, atau detik tidak valid. Menit dan detik harus < 60." };
+            }
+
+            let decimal = degrees + (minutes / 60) + (seconds / 3600);
+            if (direction === 'S' || direction === 'W') decimal = -decimal;
+
+            // Validasi rentang
+            if ((direction === 'N' || direction === 'S') && (decimal < -90 || decimal > 90)) {
+                return { error: "Latitude harus antara -90 dan 90 derajat." };
+            }
+            if ((direction === 'E' || direction === 'W') && (decimal < -180 || decimal > 180)) {
+                return { error: "Longitude harus antara -180 dan 180 derajat." };
+            }
+
+            return { value: decimal };
+        }
+
+        function showMap() {
+            const coordInput = document.getElementById('coordinates').value.trim();
+            const errorDiv = document.getElementById('error');
+            errorDiv.style.display = 'none';
+            errorDiv.textContent = '';
+
+            console.log("Input mentah:", coordInput);
+
+            // Ganti koma dengan titik untuk detik desimal dalam input mentah
+            const normalizedInput = coordInput.replace(/(\d+),(\d+)/g, '$1.$2');
+            console.log("Input ternormalisasi:", normalizedInput);
+
+            const coords = normalizedInput.split(',').map(c => c.trim());
+            if (coords.length !== 2) {
+                errorDiv.textContent = "Input harus berisi dua koordinat (latitude, longitude) dipisah koma.";
+                errorDiv.style.display = 'block';
+                console.log("Split gagal:", coords);
+                return;
+            }
+
+            const latResult = parseDMS(coords[0]);
+            const lngResult = parseDMS(coords[1]);
+
+            if (latResult.error || lngResult.error) {
+                errorDiv.textContent = latResult.error || lngResult.error;
+                errorDiv.style.display = 'block';
+                return;
+            }
+
+            const lat = latResult.value;
+            const lng = lngResult.value;
+
+            console.log("Koordinat desimal: lat=", lat, "lng=", lng);
+
+            initMap(lat, lng);
+        }
+
+        // Inisialisasi peta dengan koordinat default (Jakarta)
+        initMap(-6.2088, 106.8456);
+    </script>
+</body>
+</html>
