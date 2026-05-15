@@ -3,9 +3,8 @@ const app = express();
 app.use(express.json());
 
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
-// Endpoint ini akan jadi: https://domain-kamu.vercel.app/api
 app.post('/api', async (req, res) => {
     const update = req.body;
     if (update.message && update.message.text) {
@@ -13,24 +12,40 @@ app.post('/api', async (req, res) => {
         const userText = update.message.text;
 
         try {
-            const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
-            const geminiResponse = await fetch(geminiUrl, {
+            // Panggil API Groq
+            const groqResponse = await fetch("https://api.groq.com/openai/v1/chat/completions", {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ contents: [{ parts: [{ text: userText }] }] })
+                headers: {
+                    'Authorization': `Bearer ${GROQ_API_KEY}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    messages: [{ role: "user", content: userText }],
+                    model: "llama-3.3-70b-versatile", // Model kencang milik Groq
+                })
             });
-            const geminiData = await geminiResponse.json();
-            const aiReply = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "Aduh, otakku lagi ngeblank...";
 
+            const groqData = await groqResponse.json();
+            const aiReply = groqData.choices?.[0]?.message?.content || "Aduh, Groq lagi pusing...";
+
+            // Kirim balik ke Telegram
             const telegramUrl = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`;
             await fetch(telegramUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ chat_id: chatId, text: aiReply })
             });
-        } catch (error) { console.error(error); }
+
+        } catch (error) {
+            console.error("Error Groq:", error);
+        }
     }
     res.status(200).send('OK');
+});
+
+// Halaman utama biar gak 404
+app.get('/', (req, res) => {
+    res.send('Bot AI Groq sudah online!');
 });
 
 module.exports = app;
