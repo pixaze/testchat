@@ -5,26 +5,54 @@ app.use(express.json());
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
-// KITA UBAH BIAR GAK BAHAS RPL MULU
-const SYSTEM_PROMPT = "Nama kamu Nyx. Kamu AI yang asik, pinter, dan gak kaku. Kamu bisa bahas apa aja dari curhat sampe teknologi. Jangan cuma bahas RPL kecuali ditanya. Gunakan bahasa gaul yang sopan (gue/lo atau aku/kamu).";
+const SYSTEM_PROMPT = "Nama kamu Nyx. Kamu AI yang asik, pinter, dan gak kaku. Jangan cuma bahas RPL kecuali ditanya. Gunakan gaya bahasa anak muda yang sopan (gue/lo atau aku/kamu).";
 
 app.post('/api', async (req, res) => {
     const update = req.body;
-    if (!update.message) return res.sendStatus(200);
+    if (!update.message) return res.status(200).send('OK');
 
     const chatId = update.message.chat.id;
     let userText = update.message.text || update.message.caption || "";
     let imageUrl = null;
-    let modelToUse = "llama-3.3-70b-versatile"; // Model default untuk teks (super cerdas)
+    let modelToUse = "openai/gpt-oss-120b";
 
     try {
-        // 1. DETEKSI TIPE PESAN
+        // 1. FILTER STIKER
         if (update.message.sticker) {
-            return sendMessage(chatId, "Stikernya lucu, tapi gue lebih jago bales chat atau liat foto nih! 😎");
+            await sendMessage(chatId, "Stikernya lucu, tapi gue lebih jago bales chat atau liat foto nih! 😎");
+            return res.status(200).send('OK');
         } 
 
+        // 2. HANDLER COMMAND /menu
+        if (userText === '/menu') {
+            await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    chat_id: chatId,
+                    text: "Klik tombol di bawah ini buat buka **Menu Website** kamu! 🌐",
+                    parse_mode: "Markdown",
+                    reply_markup: {
+                        inline_keyboard: [
+                            [
+                                { 
+                                    text: "Buka Website Nyx 🚀", 
+                                    // GANTI url di bawah ini dengan link website toko/portfolio kamu (Wajib HTTPS)
+                                    web_app: { url: "https://nyx-web-kamu.vercel.app" } 
+                                }
+                            ],
+                            [
+                                { text: "Hubungi Admin 👨‍💻", url: "https://t.me/username_lo" }
+                            ]
+                        ]
+                    }
+                })
+            });
+            return res.status(200).send('OK');
+        }
+
+        // JALUR CHAT AI SEPERTI BIASA
         if (update.message.photo) {
-            // Jika ada foto, kita beralih ke model Vision
             modelToUse = "llama-3.2-11b-vision-preview";
             const photo = update.message.photo[update.message.photo.length - 1];
             const fileRes = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/getFile?file_id=${photo.file_id}`);
@@ -33,18 +61,15 @@ app.post('/api', async (req, res) => {
             if (!userText) userText = "Coba jelasin gambar ini.";
         }
 
-        // 2. KONSTRUKSI PESAN UNTUK GROQ
-        let contentPayload;
-        if (imageUrl) {
-            contentPayload = [
-                { type: "text", text: userText },
-                { type: "image_url", image_url: { url: imageUrl } }
-            ];
-        } else {
-            contentPayload = userText;
+        if (!update.message.text && !update.message.photo && !update.message.caption) {
+            await sendMessage(chatId, "Gue baru bisa paham teks sama foto aja nih untuk sekarang. 🙏");
+            return res.status(200).send('OK');
         }
 
-        // 3. PANGGIL API GROQ
+        let contentPayload = imageUrl 
+            ? [{ type: "text", text: userText }, { type: "image_url", image_url: { url: imageUrl } }]
+            : userText;
+
         const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${GROQ_API_KEY}`, 'Content-Type': 'application/json' },
@@ -59,14 +84,18 @@ app.post('/api', async (req, res) => {
         });
 
         const groqData = await groqRes.json();
-        const aiReply = groqData.choices?.[0]?.message?.content || "Duh, otak gue lagi nge-hang sebentar...";
-
-        await sendMessage(chatId, aiReply);
+        if (groqData.error) {
+            await sendMessage(chatId, `❌ **API Error:** ${groqData.error.message}`);
+        } else {
+            const aiReply = groqData.choices?.[0]?.message?.content || "Duh, otak gue lagi nge-hang sebentar...";
+            await sendMessage(chatId, aiReply);
+        }
 
     } catch (error) {
         console.error(error);
-        await sendMessage(chatId, "Lagi ada gangguan teknis nih, coba chat lagi ya!");
+        await sendMessage(chatId, "Lagi ada gangguan teknis koneksi ke server nih.");
     }
+
     res.status(200).send('OK');
 });
 
