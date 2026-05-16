@@ -6,19 +6,19 @@ const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
 // ============================================================
-//  💾 IN-MEMORY STORE (ganti Redis/DB buat produksi)
+//  💾 IN-MEMORY STORE 
 // ============================================================
-const conversationHistory = {};  // { chatId: [ {role, content}, ... ] }
-const userWarnings = {};         // { `${chatId}_${userId}`: count }
-const mutedUsers = {};           // { `${chatId}_${userId}`: true }
-const userModes = {};            // { chatId: 'normal' | 'roast' | 'formal' | 'story' }
-const pollVotes = {};            // { chatId: { question, options: [{text, voters:[]}] } }
-const reminderQueue = [];        // [{ chatId, text, fireAt }]
-const afkUsers = {};             // { `${chatId}_${userId}`: { reason, since } }
-const chatStats = {};            // { chatId: { userId: { name, count } } }
-const triviaSession = {};        // { chatId: { q, answer, active } }
-const welcomeConfig = {};        // { chatId: { enabled, message } }
-const rateLimit = {};            // { userId: lastTimestamp }
+const conversationHistory = {};  
+const userWarnings = {};         
+const mutedUsers = {};           
+const userModes = {};            
+const pollVotes = {};            
+const reminderQueue = [];        
+const afkUsers = {};             
+const chatStats = {};            
+const triviaSession = {};        
+const welcomeConfig = {};        
+const rateLimit = {};            
 
 // ============================================================
 //  🎭 STIKER DATABASE
@@ -38,23 +38,18 @@ const BASE_SYSTEM_PROMPT = `Nama kamu Nyx. Kamu AI yang asik, pinter, dan gak ka
 PENTING: Jangan kirim format tabel pipa '|---|'. Gunakan list biasa atau code block agar rapi di HP.
 
 ATURAN STIKER:
-Lebih dari 85% respon harus teks biasa tanpa stiker. Sisipkan [[STICKER:nama]] HANYA jika benar-benar cocok.
-Pilihan: ga_masuk_akal, anjing_berak, ngakak, nangis, oke.
-
-RIWAYAT PERCAKAPAN: Kamu bisa mengingat konteks percakapan sebelumnya dalam satu sesi.`;
+Lebih dari 85% respon harus teks biasa tanpa stiker. Sisipkan [[STICKER:nama]] HANYA jika benar-benar cocok atau suasananya mendukung.
+Pilihan: ga_masuk_akal, anjing_berak, ngakak, nangis, oke.`;
 
 const MODE_PROMPTS = {
     normal: '',
-    roast:  '\n\nMODE AKTIF: ROAST MODE. Balas semua pesan dengan roast pedas tapi lucu, gak serius.',
-    formal: '\n\nMODE AKTIF: FORMAL. Gunakan bahasa Indonesia baku yang sopan dan profesional.',
-    story:  '\n\nMODE AKTIF: STORYTELLER. Jadikan setiap jawaban sebagai narasi cerita pendek yang kreatif.',
-    debate: '\n\nMODE AKTIF: DEBAT. Selalu ambil posisi berlawanan dari user dan pertahankan dengan argumen logis.',
-    uwu:    '\n\nMODE AKTIF: UWU. Balas dengan bahasa uwu imut khas anime, tapi tetap informatif :3',
+    roast:  '\n\nMODE AKTIF: ROAST MODE. Balas semua pesan dengan roast pedas, menyindir, tapi tetep lucu dan menghibur.',
+    formal: '\n\nMODE AKTIF: FORMAL. Gunakan bahasa Indonesia baku yang sopan, rapi, dan profesional layaknya corporate.',
+    story:  '\n\nMODE AKTIF: STORYTELLER. Jadikan setiap jawaban dikemas dalam bentuk cerita pendek naratif yang kreatif.',
+    debate: '\n\nMODE AKTIF: DEBAT. Selalu ambil posisi berlawanan dari argumen user dan pertahankan dengan logika yang kuat.',
+    uwu:    '\n\nMODE AKTIF: UWU. Balas dengan gaya imut bahasa uwu khas anime kawai, tapi isinya tetep pinter :3',
 };
 
-// ============================================================
-//  🎲 DATA TRIVIA
-// ============================================================
 const TRIVIA_LIST = [
     { q: "Apa ibu kota Australia?", a: "canberra" },
     { q: "Berapa hasil 17 × 13?", a: "221" },
@@ -91,28 +86,6 @@ async function sendSticker(chatId, fileId) {
     await tgCall('sendSticker', { chat_id: chatId, sticker: fileId });
 }
 
-async function sendPhoto(chatId, url, caption = '') {
-    await tgCall('sendPhoto', { chat_id: chatId, photo: url, caption, parse_mode: "Markdown" });
-}
-
-async function deleteMessage(chatId, messageId) {
-    await tgCall('deleteMessage', { chat_id: chatId, message_id: messageId });
-}
-
-async function pinMessage(chatId, messageId) {
-    await tgCall('pinChatMessage', { chat_id: chatId, message_id: messageId });
-}
-
-async function getMemberStatus(chatId, userId) {
-    const r = await tgCall('getChatMember', { chat_id: chatId, user_id: userId });
-    return r?.result?.status;
-}
-
-async function isAdmin(chatId, userId) {
-    const status = await getMemberStatus(chatId, userId);
-    return ['administrator', 'creator'].includes(status);
-}
-
 function chunkText(text, size) {
     const chunks = [];
     for (let i = 0; i < text.length; i += size) chunks.push(text.slice(i, i + size));
@@ -135,23 +108,25 @@ function getSystemPrompt(chatId) {
     return BASE_SYSTEM_PROMPT + (MODE_PROMPTS[mode] || '');
 }
 
+async function isAdmin(chatId, userId) {
+    const r = await tgCall('getChatMember', { chat_id: chatId, user_id: userId });
+    const status = r?.result?.status;
+    return ['administrator', 'creator'].includes(status);
+}
+
 // ============================================================
-//  🤖 AI CALL (dengan memory)
+//  🤖 AI CALL (Dengan Memory 20 Chat Context)
 // ============================================================
 async function callAI(chatId, userContent, imageUrl = null) {
-    const modelToUse = imageUrl
-        ? "meta-llama/llama-4-scout-17b-16e-instruct"
-        : "openai/gpt-oss-120b";
-
+    const modelToUse = imageUrl ? "meta-llama/llama-4-scout-17b-16e-instruct" : "openai/gpt-oss-120b";
     if (!conversationHistory[chatId]) conversationHistory[chatId] = [];
 
-    let contentPayload = imageUrl
+    let contentPayload = imageUrl 
         ? [{ type: "text", text: userContent }, { type: "image_url", image_url: { url: imageUrl } }]
         : userContent;
 
     conversationHistory[chatId].push({ role: "user", content: contentPayload });
 
-    // Batasi history ke 20 pesan terakhir agar token hemat
     if (conversationHistory[chatId].length > 20) {
         conversationHistory[chatId] = conversationHistory[chatId].slice(-20);
     }
@@ -161,10 +136,7 @@ async function callAI(chatId, userContent, imageUrl = null) {
         headers: { 'Authorization': `Bearer ${GROQ_API_KEY}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
             model: modelToUse,
-            messages: [
-                { role: "system", content: getSystemPrompt(chatId) },
-                ...conversationHistory[chatId]
-            ],
+            messages: [{ role: "system", content: getSystemPrompt(chatId) }, ...conversationHistory[chatId]],
             temperature: 0.7,
             max_tokens: 1500
         })
@@ -177,15 +149,10 @@ async function callAI(chatId, userContent, imageUrl = null) {
 
     const data = await groqRes.json();
     const reply = data.choices?.[0]?.message?.content || "Otak gue lagi kosong nih...";
-
     conversationHistory[chatId].push({ role: "assistant", content: reply });
-
     return reply;
 }
 
-// ============================================================
-//  📤 KIRIM BALASAN AI (parsing stiker)
-// ============================================================
 async function sendAIReply(chatId, rawReply) {
     const stickerMatch = rawReply.match(/\[\[STICKER:(.*?)\]\]/);
     let finalReply = rawReply;
@@ -198,35 +165,7 @@ async function sendAIReply(chatId, rawReply) {
             finalReply = rawReply.replace(/\[\[STICKER:(.*?)\]\]/g, '').trim();
         }
     }
-
     if (finalReply) await sendMessage(chatId, finalReply);
-}
-
-// ============================================================
-//  ⏰ REMINDER CHECKER (cek tiap 30 detik)
-// ============================================================
-setInterval(async () => {
-    const now = Date.now();
-    for (let i = reminderQueue.length - 1; i >= 0; i--) {
-        const r = reminderQueue[i];
-        if (now >= r.fireAt) {
-            await sendMessage(r.chatId, `⏰ *Reminder:* ${r.text}`);
-            reminderQueue.splice(i, 1);
-        }
-    }
-}, 30000);
-
-// ============================================================
-//  📊 FUNGSI POLLING
-// ============================================================
-async function sendPoll(chatId, question, options) {
-    await tgCall('sendPoll', {
-        chat_id: chatId,
-        question,
-        options,
-        is_anonymous: false,
-        allows_multiple_answers: false
-    });
 }
 
 // ============================================================
@@ -235,602 +174,441 @@ async function sendPoll(chatId, question, options) {
 async function handleCommand(msg, chatId, chatType, userId, userName, userText) {
     const cmd = userText.split(' ')[0].toLowerCase().split('@')[0];
     const args = userText.split(' ').slice(1).join(' ').trim();
+    
     const adminOnly = async () => {
         if (chatType === 'private') return true;
         if (!(await isAdmin(chatId, userId))) {
-            await sendMessage(chatId, "⛔ Command ini khusus admin grup.");
+            await sendMessage(chatId, "⛔ Perintah ini khusus untuk admin grup.");
             return false;
         }
         return true;
     };
 
-    // ── /start ─────────────────────────────────────────────
     if (cmd === '/start') {
-        await sendMessage(chatId,
-`🤖 *Halo! Gue Nyx, AI Bot Telegram lo!*
-
-Gue bisa nemenin lo ngobrol, jawab pertanyaan, analisis foto, moderasi grup, dan banyak lagi.
-
-Ketik /help buat liat semua fitur lengkapnya. 🚀`
-        );
+        await sendMessage(chatId, "🤖 *Halo! Gue Nyx, AI Bot Telegram lo!*\n\nGue bisa nemenin lo ngobrol, analisis foto, moderasi grup, hingga main game. Ketik /help buat liat daftar commands lengkap.");
         return;
     }
 
-    // ── /help ─────────────────────────────────────────────
     if (cmd === '/help') {
-        await sendMessage(chatId,
+        await sendMessage(chatId, 
 `📖 *Daftar Lengkap Perintah Nyx*
 
 *🤖 AI & Chat*
 /clear — Reset memori percakapan
 /mode [normal|roast|formal|story|debate|uwu] — Ganti gaya bicara Nyx
-/tanya [pertanyaan] — Tanya AI langsung
+/tanya [teks] — Tanya AI langsung
 /ringkas [teks] — Ringkas teks panjang
-/translate [lang] [teks] — Terjemahkan teks
-/code [bahasa] [deskripsi] — Generate kode
-/roast [@user] — Roast seseorang (for fun)
+/translate [bahasa] [teks] — Terjemahkan kalimat
+/code [bahasa] [deskripsi] — Buatkan struktur kode
+/roast [@user] — Roast lucu seseorang
 
 *🛠️ Tools*
-/cuaca [kota] — Info cuaca kota (simulasi)
-/kalkulator [ekspresi] — Hitung ekspresi matematika
-/reminder [menit] [pesan] — Set pengingat
-/poll [pertanyaan] | [op1] | [op2] | ... — Buat polling
+/kalkulator [ekspresi] — Hitung matematika (Contoh: 5*5+10)
+/reminder [menit] [pesan] — Pengingat otomatis
+/poll [pertanyaan] | [opsi1] | [opsi2] — Buat polling grup
+/cuaca [kota] — Cek prakiraan cuaca (Simulasi)
+/dice | /coinflip | /quote
 
 *🎮 Games & Fun*
-/trivia — Tebak pertanyaan random
-/tebak [jawaban] — Jawab trivia aktif
-/kata — Game tebak kata (coming soon)
-/dice [sisi] — Lempar dadu (default 6)
-/coinflip — Lempar koin
-/quote — Kutipan inspiratif random
-/zodiak [tanda] — Ramalan zodiak hari ini
+/trivia — Mulai tebak-tebakan seru
+/tebak [jawaban] — Jawab kuis trivia aktif
 
-*👥 Grup & Moderasi (Admin)*
-/ban — Ban user (reply pesan targetnya)
-/kick — Kick user (reply)
-/mute — Mute user (reply)
-/unmute — Unmute user (reply)
-/warn — Beri peringatan (reply) — 3x = kick
-/warnings — Lihat peringatan user (reply)
-/pin — Pin pesan (reply)
-/delete — Hapus pesan (reply)
-/settopic [topik] — Ubah deskripsi grup
-/setwelcome [pesan] — Set pesan sambutan
-/stats — Statistik aktivitas chat
-/afk [alasan] — Set status AFK
-
-*📺 Channel*
-/broadcast [pesan] — Kirim pesan ke channel (admin)
+*👥 Moderasi Grup (Admin)*
+/ban | /kick | /mute | /unmute — (Reply user target)
+/warn — Beri peringatan (3x warn = Auto Kick)
+/warnings — Cek jumlah warn user
+/pin | /delete — Pin/Hapus pesan target
+/settopic [topik] — Ganti deskripsi grup
+/setwelcome [pesan] — Atur sambutan member baru
+/stats — Statistik chat aktif grup
+/afk [alasan] — Set status AFK lo
 
 *📱 Menu*
-/menu — Buka portal mini apps`
+/menu — Portal 5 Aplikasi Mini Apps`
         );
         return;
     }
 
-    // ── /clear ────────────────────────────────────────────
     if (cmd === '/clear') {
         conversationHistory[chatId] = [];
-        await sendMessage(chatId, "🧹 Memori percakapan gue udah di-reset! Kita mulai dari awal ya.");
+        await sendMessage(chatId, "🧹 Memori percakapan sukses di-reset dari awal!");
         return;
     }
 
-    // ── /mode ─────────────────────────────────────────────
     if (cmd === '/mode') {
         const valid = Object.keys(MODE_PROMPTS);
         if (!args || !valid.includes(args)) {
-            await sendMessage(chatId, `Mode yang tersedia: ${valid.map(m => `\`${m}\``).join(', ')}\nContoh: /mode roast`);
+            await sendMessage(chatId, `Mode tersedia: ${valid.map(m => `\`${m}\``).join(', ')}\nContoh: \`/mode roast\``);
             return;
         }
         userModes[chatId] = args;
-        await sendMessage(chatId, `✅ Mode berhasil diganti ke *${args.toUpperCase()}*! Cobain ngobrol sama gue sekarang.`);
+        await sendMessage(chatId, `✅ Gaya bicara berhasil diubah ke mode *${args.toUpperCase()}*!`);
         return;
     }
 
-    // ── /tanya ────────────────────────────────────────────
-    if (cmd === '/tanya') {
-        if (!args) { await sendMessage(chatId, "Contoh: /tanya siapa itu Elon Musk?"); return; }
-        const reply = await callAI(chatId, args);
+    if (['/tanya', '/ringkas', '/translate', '/code', '/roast', '/zodiak'].includes(cmd)) {
+        if (!args) { await sendMessage(chatId, `Format salah. Contoh: \`${cmd} petunjuk lo\``); return; }
+        let promptAI = args;
+        if (cmd === '/ringkas') promptAI = `Ringkas teks berikut dengan padat dan jelas:\n\n${args}`;
+        if (cmd === '/translate') promptAI = `Terjemahkan kalimat ini ke bahasa yang diminta. Tampilkan hanya hasil akhirnya:\n\n${args}`;
+        if (cmd === '/code') promptAI = `Buatkan implementasi kode bersih terstruktur sesuai deskripsi: ${args}`;
+        if (cmd === '/roast') promptAI = `Berikan roasting verbal yang sangat kocak, tajam, kreatif untuk nama: "${args}". Max 3 kalimat.`;
+        if (cmd === '/zodiak') promptAI = `Berikan ramalan zodiak untuk bintang ${args} hari ini dengan pembawaan yang seru dan asik.`;
+
+        const reply = await callAI(chatId, promptAI);
         await sendAIReply(chatId, reply);
         return;
     }
 
-    // ── /ringkas ──────────────────────────────────────────
-    if (cmd === '/ringkas') {
-        if (!args) { await sendMessage(chatId, "Contoh: /ringkas [teks panjang lo]"); return; }
-        const reply = await callAI(chatId, `Ringkas teks ini dengan singkat dan jelas:\n\n${args}`);
-        await sendAIReply(chatId, reply);
-        return;
-    }
-
-    // ── /translate ────────────────────────────────────────
-    if (cmd === '/translate') {
-        const parts = args.split(' ');
-        const lang = parts[0];
-        const text = parts.slice(1).join(' ');
-        if (!lang || !text) { await sendMessage(chatId, "Contoh: /translate english halo dunia"); return; }
-        const reply = await callAI(chatId, `Terjemahkan teks berikut ke bahasa ${lang}. Balas HANYA hasil terjemahannya saja:\n\n${text}`);
-        await sendAIReply(chatId, reply);
-        return;
-    }
-
-    // ── /code ─────────────────────────────────────────────
-    if (cmd === '/code') {
-        const parts = args.split(' ');
-        const lang = parts[0];
-        const desc = parts.slice(1).join(' ');
-        if (!lang || !desc) { await sendMessage(chatId, "Contoh: /code python fungsi fibonacci"); return; }
-        const reply = await callAI(chatId, `Buatkan kode ${lang} untuk: ${desc}. Sertakan penjelasan singkat.`);
-        await sendAIReply(chatId, reply);
-        return;
-    }
-
-    // ── /roast ────────────────────────────────────────────
-    if (cmd === '/roast') {
-        const target = args || userName;
-        const reply = await callAI(chatId, `Roast orang bernama "${target}" dengan gaya lucu dan kreatif, gak serius, gak menyinggung SARA. Max 3 kalimat.`);
-        await sendAIReply(chatId, reply);
-        return;
-    }
-
-    // ── /kalkulator ───────────────────────────────────────
-    if (cmd === '/kalkulator' || cmd === '/calc') {
-        if (!args) { await sendMessage(chatId, "Contoh: /kalkulator 25 * 4 + 10"); return; }
+    if (cmd === '/kalkulator') {
+        if (!args) { await sendMessage(chatId, "Contoh: `/kalkulator 10 * 5 + 4`"); return; }
         try {
-            // Evaluasi ekspresi matematika sederhana (aman — hanya angka & operator)
             const sanitized = args.replace(/[^0-9+\-*/().\s%]/g, '');
-            // eslint-disable-next-line no-new-func
             const result = Function(`"use strict"; return (${sanitized})`)();
-            await sendMessage(chatId, `🔢 *Hasil:*\n\`${sanitized}\` = *${result}*`);
+            await sendMessage(chatId, `🔢 *Hasil Perhitungan:*\n\`${sanitized}\` = *${result}*`);
         } catch {
-            await sendMessage(chatId, "❌ Ekspresi gak valid. Contoh: \`25 * 4 + 10\`");
+            await sendMessage(chatId, "❌ Rumus tidak valid.");
         }
         return;
     }
 
-    // ── /reminder ─────────────────────────────────────────
     if (cmd === '/reminder') {
         const parts = args.split(' ');
         const minutes = parseInt(parts[0]);
         const text = parts.slice(1).join(' ');
-        if (isNaN(minutes) || !text) {
-            await sendMessage(chatId, "Contoh: /reminder 10 Minum air putih");
-            return;
-        }
+        if (isNaN(minutes) || !text) { await sendMessage(chatId, "Format: `/reminder 5 minum obat`"); return; }
         reminderQueue.push({ chatId, text, fireAt: Date.now() + minutes * 60000 });
-        await sendMessage(chatId, `⏰ Oke! Gue bakal ingetin lo soal "*${text}*" dalam *${minutes} menit*.`);
+        await sendMessage(chatId, `⏰ Siap! Pengingat untuk *"${text}"* diset dalam *${minutes} menit*.`);
         return;
     }
 
-    // ── /poll ─────────────────────────────────────────────
     if (cmd === '/poll') {
         const parts = args.split('|').map(p => p.trim());
-        if (parts.length < 3) {
-            await sendMessage(chatId, "Contoh: /poll Pilih makanan? | Nasi Goreng | Mie Ayam | Soto");
-            return;
-        }
-        const question = parts[0];
-        const options = parts.slice(1);
-        await sendPoll(chatId, question, options);
+        if (parts.length < 3) { await sendMessage(chatId, "Format: `/poll Judul | Opsi A | Opsi B`"); return; }
+        await tgCall('sendPoll', { chat_id: chatId, question: parts[0], options: parts.slice(1), is_anonymous: false });
         return;
     }
 
-    // ── /dice ─────────────────────────────────────────────
     if (cmd === '/dice') {
         const sides = parseInt(args) || 6;
-        if (sides < 2 || sides > 100) { await sendMessage(chatId, "Sisi dadu harus antara 2–100."); return; }
         const result = Math.floor(Math.random() * sides) + 1;
-        await sendMessage(chatId, `🎲 Dadu ${sides} sisi: *${result}*`);
+        await sendMessage(chatId, `🎲 Hasil lempar dadu ${sides} sisi: *${result}*`);
         return;
     }
 
-    // ── /coinflip ─────────────────────────────────────────
     if (cmd === '/coinflip') {
-        const result = Math.random() > 0.5 ? '🪙 HEADS (Gambar)' : '🪙 TAILS (Angka)';
-        await sendMessage(chatId, `Hasil lempar koin: *${result}*`);
+        await sendMessage(chatId, Math.random() > 0.5 ? '🪙 *HEADS (Gambar)*' : '🪙 *TAILS (Angka)*');
         return;
     }
 
-    // ── /quote ────────────────────────────────────────────
     if (cmd === '/quote') {
         const quotes = [
-            { q: "Kode yang bagus adalah dokumentasi terbaiknya.", a: "Steve McConnell" },
-            { q: "Pertama, selesaikan masalahnya. Kemudian, tulis kodenya.", a: "John Johnson" },
-            { q: "Satu-satunya cara untuk melakukan pekerjaan hebat adalah mencintai apa yang kamu lakukan.", a: "Steve Jobs" },
-            { q: "Jika debuggingnya adalah proses menghapus bug, maka programming adalah proses memasukkan bug.", a: "Edsger Dijkstra" },
-            { q: "Belajar tidak pernah melelahkan pikiran.", a: "Leonardo da Vinci" },
-            { q: "Kesalahan adalah bukti bahwa kamu sedang mencoba.", a: "Unknown" },
-            { q: "Data beats opinions.", a: "Anonymous" },
-            { q: "Kode seperti humor: kalau harus dijelaskan, maka itu jelek.", a: "Cory House" },
+            { q: "Pertama solusikan masalahnya, baru tulis baris kodenya.", a: "John Johnson" },
+            { q: "Kode yang rapi dan bersih adalah bentuk dokumentasi terbaik.", a: "Steve McConnell" },
+            { q: "Kesalahan hari ini adalah kompilator kesuksesan hari esok.", a: "Nyx" }
         ];
         const pick = quotes[Math.floor(Math.random() * quotes.length)];
         await sendMessage(chatId, `💬 _"${pick.q}"_\n— *${pick.a}*`);
         return;
     }
 
-    // ── /zodiak ───────────────────────────────────────────
-    if (cmd === '/zodiak') {
-        if (!args) { await sendMessage(chatId, "Contoh: /zodiak scorpio"); return; }
-        const reply = await callAI(chatId, `Berikan ramalan zodiak ${args} hari ini yang fun, singkat (max 3 kalimat), dan gak terlalu serius.`);
-        await sendAIReply(chatId, reply);
-        return;
-    }
-
-    // ── /trivia ───────────────────────────────────────────
     if (cmd === '/trivia') {
         if (triviaSession[chatId]?.active) {
-            await sendMessage(chatId, `⚡ Trivia lagi aktif!\n\n*${triviaSession[chatId].q}*\n\nJawab dengan /tebak [jawaban]`);
+            await sendMessage(chatId, `⚡ Trivia sedang berjalan!\n💬 *${triviaSession[chatId].q}*\nJawab dengan \`/tebak [jawaban]\``);
             return;
         }
         const pick = TRIVIA_LIST[Math.floor(Math.random() * TRIVIA_LIST.length)];
         triviaSession[chatId] = { q: pick.q, answer: pick.a, active: true };
-        await sendMessage(chatId, `🧠 *TRIVIA TIME!*\n\n${pick.q}\n\nKetik /tebak [jawaban] lo!`);
+        await sendMessage(chatId, `🧠 *KUIS TRIVIA NYX*\n\n👉 *${pick.q}*\n\nBalas dengan perintah \`/tebak [jawaban lo]\``);
         return;
     }
 
-    // ── /tebak ────────────────────────────────────────────
     if (cmd === '/tebak') {
         const session = triviaSession[chatId];
-        if (!session?.active) { await sendMessage(chatId, "Belum ada trivia aktif. Mulai dulu dengan /trivia!"); return; }
-        if (!args) { await sendMessage(chatId, "Contoh: /tebak Canberra"); return; }
+        if (!session?.active) { await sendMessage(chatId, "Gak ada kuis trivia yang aktif sekarang."); return; }
+        if (!args) { await sendMessage(chatId, "Format: `/tebak jawaban`"); return; }
         if (args.toLowerCase().trim() === session.answer.toLowerCase()) {
             triviaSession[chatId] = null;
             await sendSticker(chatId, STICKER_DATABASE['ngakak']);
-            await sendMessage(chatId, `✅ *BENERRRR!* Mantap jiwa, *${userName}*! Jawabannya memang *${session.answer}*.`);
+            await sendMessage(chatId, `🎉 *BERHASIL!* Jawaban lo bener banget *${userName}*, jawabannya: *${session.answer}*!`);
         } else {
-            await sendMessage(chatId, `❌ Salah! Coba lagi atau ketik /trivia buat soal baru.`);
+            await sendMessage(chatId, "❌ Salah parah! Coba lagi bro.");
         }
         return;
     }
 
-    // ── /cuaca ────────────────────────────────────────────
     if (cmd === '/cuaca') {
-        if (!args) { await sendMessage(chatId, "Contoh: /cuaca Jakarta"); return; }
-        // Simulasi cuaca (connect ke OpenWeatherMap API kalau mau real)
-        const conditions = ['☀️ Cerah', '⛅ Berawan', '🌧️ Hujan Ringan', '⛈️ Badai', '🌤️ Partly Cloudy'];
-        const temps = [26, 28, 30, 32, 24, 22, 29, 31];
-        const cond = conditions[Math.floor(Math.random() * conditions.length)];
-        const temp = temps[Math.floor(Math.random() * temps.length)];
-        const humidity = Math.floor(Math.random() * 40) + 50;
-        await sendMessage(chatId,
-`🌍 *Cuaca ${args}* _(Simulasi)_
-
-Kondisi: ${cond}
-🌡️ Suhu: *${temp}°C*
-💧 Kelembaban: *${humidity}%*
-💨 Angin: ${Math.floor(Math.random() * 20) + 5} km/h
-
-_Untuk data real, connect ke OpenWeatherMap API._`
-        );
+        if (!args) { await sendMessage(chatId, "Contoh: `/cuaca Majalengka`"); return; }
+        const conditions = ['☀️ Cerah Maksimal', '⛅ Berawan Santai', '🌧️ Hujan Deras', '🌤️ Berawan Cerah'];
+        const currentCond = conditions[Math.floor(Math.random() * conditions.length)];
+        await sendMessage(chatId, `🌍 *Prakiraan Cuaca Kota ${args}* (Simulasi)\n\n📊 Kondisi: *${currentCond}*\n🌡️ Suhu: *${Math.floor(Math.random() * 10) + 24}°C*\n💧 Kelembaban: *${Math.floor(Math.random() * 30) + 60}%*`);
         return;
     }
 
-    // ── /afk ─────────────────────────────────────────────
     if (cmd === '/afk') {
-        const key = `${chatId}_${userId}`;
-        afkUsers[key] = { reason: args || 'Lagi away', since: Date.now(), name: userName };
-        await sendMessage(chatId, `😴 *${userName}* sekarang AFK: _${args || 'Lagi away'}_`);
+        afkUsers[`${chatId}_${userId}`] = { reason: args || 'Lagi menjauh dari keyboard', since: Date.now(), name: userName };
+        await sendMessage(chatId, `😴 *${userName}* sekarang berstatus AFK: _${args || 'Away'}_`);
         return;
     }
 
-    // ── /stats ────────────────────────────────────────────
     if (cmd === '/stats') {
         const stats = chatStats[chatId];
-        if (!stats || Object.keys(stats).length === 0) {
-            await sendMessage(chatId, "Belum ada statistik chat. Mulai ngobrol dulu!");
-            return;
-        }
+        if (!stats) { await sendMessage(chatId, "Belum ada statistik chat terekam."); return; }
         const sorted = Object.entries(stats).sort((a, b) => b[1].count - a[1].count).slice(0, 10);
-        const lines = sorted.map(([, v], i) => `${i + 1}. *${escapeMarkdown(v.name)}* — ${v.count} pesan`);
-        await sendMessage(chatId, `📊 *Top 10 Paling Aktif*\n\n${lines.join('\n')}`);
+        const ranks = sorted.map(([, v], i) => `${i + 1}. *${escapeMarkdown(v.name)}* — ${v.count} pesan`);
+        await sendMessage(chatId, `📊 *Peringkat Keaktifan Anggota Grup*\n\n${ranks.join('\n')}`);
         return;
     }
 
-    // ── /menu ─────────────────────────────────────────────
     if (cmd === '/menu') {
         await tgCall('sendMessage', {
             chat_id: chatId,
-            text: "🌐 *Nyx Portal Mini Apps* 🌐\n\nPilih salah satu aplikasi di bawah ini:",
+            text: "🌐 **Nyx Portal Mini Apps** 🌐\n\nPilih dan jalankan aplikasi lo langsung di dalam Telegram:",
             parse_mode: "Markdown",
             reply_markup: {
                 inline_keyboard: [
-                    [{ text: "🛍️ RelxShop Marketplace",   web_app: { url: "https://relxshop-kamu.vercel.app" } }],
+                    [{ text: "🛍️ RelxShop Marketplace", web_app: { url: "https://relxshop-kamu.vercel.app" } }],
                     [{ text: "📂 Portfolio & Project RPL", web_app: { url: "https://portfolio-kamu.vercel.app" } }],
-                    [{ text: "📊 Admin Dashboard",          web_app: { url: "https://admin-kamu.vercel.app" } }],
-                    [{ text: "🎮 Mini Game Pixel Art",      web_app: { url: "https://game-kamu.vercel.app" } }],
-                    [{ text: "⚙️ Pengaturan Bot AI",        web_app: { url: "https://settings-kamu.vercel.app" } }]
+                    [{ text: "📊 Admin Dashboard", web_app: { url: "https://admin-kamu.vercel.app" } }],
+                    [{ text: "🎮 Mini Game Pixel Art", web_app: { url: "https://game-kamu.vercel.app" } }],
+                    [{ text: "⚙️ Pengaturan Bot AI", web_app: { url: "https://settings-kamu.vercel.app" } }]
                 ]
             }
         });
         return;
     }
 
-    // ──────────────────────────────────────────────────────
-    //  COMMAND KHUSUS GRUP / MODERASI
-    // ──────────────────────────────────────────────────────
-    if (['private', 'channel'].includes(chatType) && ['/ban','/kick','/mute','/unmute','/warn','/warnings','/pin','/delete','/settopic','/setwelcome','/broadcast'].includes(cmd)) {
-        await sendMessage(chatId, "⛔ Command moderasi hanya bisa digunakan di grup.");
-        return;
-    }
-
-    // ── /ban ─────────────────────────────────────────────
-    if (cmd === '/ban') {
+    // INTERFACE MODERASI ADMIN GRUP
+    if (['/ban', '/kick', '/mute', '/unmute', '/warn', '/warnings', '/pin', '/delete', '/settopic', '/setwelcome'].includes(cmd)) {
         if (!await adminOnly()) return;
-        if (!msg.reply_to_message) { await sendMessage(chatId, "Reply pesan targetnya dulu, terus ketik /ban"); return; }
-        const target = msg.reply_to_message.from;
-        const r = await tgCall('banChatMember', { chat_id: chatId, user_id: target.id });
-        if (r.result) {
-            await sendSticker(chatId, STICKER_DATABASE['anjing_berak']);
-            await sendMessage(chatId, `🔨 *${target.first_name}* resmi diban dari grup! Dadah~`);
-        } else {
-            await sendMessage(chatId, "❌ Gagal ban. Pastiin gue sudah jadi Admin dengan izin 'Ban Users'.");
+        if (!msg.reply_to_message && ['/ban', '/kick', '/mute', '/unmute', '/warn', '/warnings', '/pin', '/delete'].includes(cmd)) {
+            await sendMessage(chatId, `Gunakan perintah \`${cmd}\` dengan cara mereply pesan target.`);
+            return;
         }
-        return;
-    }
 
-    // ── /kick ─────────────────────────────────────────────
-    if (cmd === '/kick') {
-        if (!await adminOnly()) return;
-        if (!msg.reply_to_message) { await sendMessage(chatId, "Reply pesan targetnya dulu, terus ketik /kick"); return; }
-        const target = msg.reply_to_message.from;
-        await tgCall('banChatMember', { chat_id: chatId, user_id: target.id });
-        await tgCall('unbanChatMember', { chat_id: chatId, user_id: target.id });
-        await sendMessage(chatId, `🚪 *${target.first_name}* dikick dari grup! Masih bisa balik kalau diundang.`);
-        return;
-    }
+        const target = msg.reply_to_message?.from;
+        const key = `${chatId}_${target?.id}`;
 
-    // ── /mute ─────────────────────────────────────────────
-    if (cmd === '/mute') {
-        if (!await adminOnly()) return;
-        if (!msg.reply_to_message) { await sendMessage(chatId, "Reply pesan targetnya dulu."); return; }
-        const target = msg.reply_to_message.from;
-        const key = `${chatId}_${target.id}`;
-        const r = await tgCall('restrictChatMember', {
-            chat_id: chatId, user_id: target.id,
-            permissions: { can_send_messages: false, can_send_polls: false, can_send_other_messages: false }
-        });
-        if (r.result) {
-            mutedUsers[key] = true;
-            await sendMessage(chatId, `🔇 *${target.first_name}* di-mute. Diem lo dulu.`);
-        } else {
-            await sendMessage(chatId, "❌ Gagal mute. Periksa izin admin gue.");
+        if (cmd === '/ban') {
+            const r = await tgCall('banChatMember', { chat_id: chatId, user_id: target.id });
+            if (r.result) {
+                await sendSticker(chatId, STICKER_DATABASE['anjing_berak']);
+                await sendMessage(chatId, `🔨 *${target.first_name}* resmi diblokir permanen dari grup.`);
+            } else await sendMessage(chatId, "❌ Eksekusi gagal, cek perizinan bot.");
         }
-        return;
-    }
-
-    // ── /unmute ───────────────────────────────────────────
-    if (cmd === '/unmute') {
-        if (!await adminOnly()) return;
-        if (!msg.reply_to_message) { await sendMessage(chatId, "Reply pesan targetnya dulu."); return; }
-        const target = msg.reply_to_message.from;
-        const key = `${chatId}_${target.id}`;
-        const r = await tgCall('restrictChatMember', {
-            chat_id: chatId, user_id: target.id,
-            permissions: {
-                can_send_messages: true, can_send_polls: true, can_send_other_messages: true,
-                can_add_web_page_previews: true, can_send_media_messages: true
-            }
-        });
-        if (r.result) {
-            delete mutedUsers[key];
-            await sendMessage(chatId, `🔊 *${target.first_name}* di-unmute. Silakan ngobrol lagi.`);
-        } else {
-            await sendMessage(chatId, "❌ Gagal unmute.");
-        }
-        return;
-    }
-
-    // ── /warn ─────────────────────────────────────────────
-    if (cmd === '/warn') {
-        if (!await adminOnly()) return;
-        if (!msg.reply_to_message) { await sendMessage(chatId, "Reply pesan targetnya dulu."); return; }
-        const target = msg.reply_to_message.from;
-        const key = `${chatId}_${target.id}`;
-        userWarnings[key] = (userWarnings[key] || 0) + 1;
-        const count = userWarnings[key];
-        if (count >= 3) {
+        
+        if (cmd === '/kick') {
             await tgCall('banChatMember', { chat_id: chatId, user_id: target.id });
             await tgCall('unbanChatMember', { chat_id: chatId, user_id: target.id });
-            userWarnings[key] = 0;
-            await sendMessage(chatId, `⛔ *${target.first_name}* udah dapat 3 peringatan → AUTO KICK!`);
-        } else {
-            await sendMessage(chatId, `⚠️ *${target.first_name}* dapat peringatan ke-*${count}/3*.\n${args ? `Alasan: _${args}_` : ''}`);
+            await sendMessage(chatId, `🚪 *${target.first_name}* berhasil dikeluarkan dari grup.`);
+        }
+
+        if (cmd === '/mute') {
+            await tgCall('restrictChatMember', { chat_id: chatId, user_id: target.id, permissions: { can_send_messages: false } });
+            mutedUsers[key] = true;
+            await sendMessage(chatId, `🔇 *${target.first_name}* berhasil dibisukan.`);
+        }
+
+        if (cmd === '/unmute') {
+            await tgCall('restrictChatMember', { chat_id: chatId, user_id: target.id, permissions: { can_send_messages: true, can_send_media_messages: true } });
+            delete mutedUsers[key];
+            await sendMessage(chatId, `🔊 *${target.first_name}* sekarang boleh ngomong lagi.`);
+        }
+
+        if (cmd === '/warn') {
+            userWarnings[key] = (userWarnings[key] || 0) + 1;
+            if (userWarnings[key] >= 3) {
+                await tgCall('banChatMember', { chat_id: chatId, user_id: target.id });
+                await tgCall('unbanChatMember', { chat_id: chatId, user_id: target.id });
+                userWarnings[key] = 0;
+                await sendMessage(chatId, `⛔ *${target.first_name}* melanggar batas (3/3) warn! Auto Kick diterapkan.`);
+            } else {
+                await sendMessage(chatId, `⚠️ Peringatan untuk *${target.first_name}* (${userWarnings[key]}/3). Alasan: ${args || 'Melanggar aturan'}`);
+            }
+        }
+
+        if (cmd === '/warnings') {
+            await sendMessage(chatId, `📋 Total catatan pelanggaran *${target.first_name}*: *${userWarnings[key] || 0}/3*`);
+        }
+
+        if (cmd === '/pin') {
+            await tgCall('pinChatMessage', { chat_id: chatId, message_id: msg.reply_to_message.message_id });
+            await sendMessage(chatId, "📌 Pesan berhasil disematkan di atas!");
+        }
+
+        if (cmd === '/delete') {
+            await tgCall('deleteMessage', { chat_id: chatId, message_id: msg.reply_to_message.message_id });
+            await tgCall('deleteMessage', { chat_id: chatId, message_id: msg.message_id });
+        }
+
+        if (cmd === '/settopic') {
+            if (!args) { await sendMessage(chatId, "Contoh: `/settopic Deskripsi Baru`"); return; }
+            await tgCall('setChatDescription', { chat_id: chatId, description: args });
+            await sendMessage(chatId, `✅ Topik deskripsi grup sukses diperbarui.`);
+        }
+
+        if (cmd === '/setwelcome') {
+            welcomeConfig[chatId] = { enabled: true, message: args || "Selamat bergabung {name}! 🎉" };
+            await sendMessage(chatId, "✅ Format sambutan kustom berhasil disimpan.");
         }
         return;
     }
 
-    // ── /warnings ─────────────────────────────────────────
-    if (cmd === '/warnings') {
-        if (!msg.reply_to_message) { await sendMessage(chatId, "Reply pesan targetnya dulu."); return; }
-        const target = msg.reply_to_message.from;
-        const key = `${chatId}_${target.id}`;
-        const count = userWarnings[key] || 0;
-        await sendMessage(chatId, `📋 *${target.first_name}* punya *${count}/3* peringatan.`);
+    if (cmd === '/broadcast' && chatType === 'channel') {
+        if (!args) return;
+        await tgCall('sendMessage', { chat_id: chatId, text: `📢 *PENGUMUMAN UTAMA*\n\n${args}`, parse_mode: "Markdown" });
         return;
     }
 
-    // ── /pin ─────────────────────────────────────────────
-    if (cmd === '/pin') {
-        if (!await adminOnly()) return;
-        if (!msg.reply_to_message) { await sendMessage(chatId, "Reply pesan yang mau di-pin."); return; }
-        const r = await tgCall('pinChatMessage', { chat_id: chatId, message_id: msg.reply_to_message.message_id });
-        if (r.result) await sendMessage(chatId, "📌 Pesan berhasil di-pin!");
-        else await sendMessage(chatId, "❌ Gagal pin. Cek izin admin gue.");
-        return;
-    }
-
-    // ── /delete ───────────────────────────────────────────
-    if (cmd === '/delete') {
-        if (!await adminOnly()) return;
-        if (!msg.reply_to_message) { await sendMessage(chatId, "Reply pesan yang mau dihapus."); return; }
-        await tgCall('deleteMessage', { chat_id: chatId, message_id: msg.reply_to_message.message_id });
-        await tgCall('deleteMessage', { chat_id: chatId, message_id: msg.message_id });
-        return;
-    }
-
-    // ── /settopic ─────────────────────────────────────────
-    if (cmd === '/settopic') {
-        if (!await adminOnly()) return;
-        if (!args) { await sendMessage(chatId, "Contoh: /settopic Grup Diskusi Teknologi"); return; }
-        const r = await tgCall('setChatDescription', { chat_id: chatId, description: args });
-        if (r.result) await sendMessage(chatId, `✅ Deskripsi grup diubah ke: _${args}_`);
-        else await sendMessage(chatId, "❌ Gagal ubah deskripsi. Pastiin gue admin.");
-        return;
-    }
-
-    // ── /setwelcome ───────────────────────────────────────
-    if (cmd === '/setwelcome') {
-        if (!await adminOnly()) return;
-        welcomeConfig[chatId] = { enabled: true, message: args || "Selamat datang {name} di grup ini! 🎉" };
-        await sendMessage(chatId, `✅ Pesan sambutan diset!\nPreview: _${welcomeConfig[chatId].message.replace('{name}', 'Member Baru')}_`);
-        return;
-    }
-
-    // ── /broadcast ────────────────────────────────────────
-    if (cmd === '/broadcast') {
-        if (!await adminOnly()) return;
-        if (!args) { await sendMessage(chatId, "Contoh: /broadcast Halo semua!"); return; }
-        await tgCall('sendMessage', { chat_id: chatId, text: `📢 *BROADCAST*\n\n${args}`, parse_mode: "Markdown" });
-        return;
-    }
-
-    // ── Command tidak dikenal ─────────────────────────────
-    await sendMessage(chatId, `❓ Command \`${cmd}\` gak gue kenal. Ketik /help buat lihat semua perintah.`);
+    await sendMessage(chatId, `❓ Perintah \`${cmd}\` tidak dikenali oleh Nyx. Jalankan /help.`);
 }
 
 // ============================================================
-//  🚀 MAIN WEBHOOK
+//  ⏰ INTERVAL RUNTIME TICKER (Simulasi background task)
+// ============================================================
+setInterval(async () => {
+    const now = Date.now();
+    for (let i = reminderQueue.length - 1; i >= 0; i--) {
+        const r = reminderQueue[i];
+        if (now >= r.fireAt) {
+            await sendMessage(r.chatId, `⏰ *PENGINGAT OTOMATIS NYX:* ${r.text}`);
+            reminderQueue.splice(i, 1);
+        }
+    }
+}, 15000);
+
+// ============================================================
+//  🚀 MAIN INCOMING WEBHOOK HANDLER
 // ============================================================
 app.post('/api', async (req, res) => {
-    res.status(200).send('OK'); // Balas Telegram duluan biar ga timeout
-
     const update = req.body;
 
-    // ── Handle inline button callback ─────────────────────
-    if (update.callback_query) {
-        const cb = update.callback_query;
-        await tgCall('answerCallbackQuery', { callback_query_id: cb.id });
-        // Extend di sini kalau lo mau inline button custom
-        return;
-    }
-
-    // ── Handle new_chat_members (welcome) ─────────────────
-    if (update.message?.new_chat_members) {
-        const chatId = update.message.chat.id;
-        const cfg = welcomeConfig[chatId];
-        for (const member of update.message.new_chat_members) {
-            if (member.is_bot) continue;
-            const wMsg = cfg?.message
-                ? cfg.message.replace('{name}', member.first_name)
-                : `👋 Halo *${member.first_name}*, selamat datang di *${update.message.chat.title}*! Ketik /help untuk info bot.`;
-            await sendMessage(chatId, wMsg);
-        }
-        return;
-    }
-
-    const msg = update.message || update.channel_post;
-    if (!msg) return;
-
-    const chatId    = msg.chat.id;
-    const chatType  = msg.chat.type;
-    const userId    = msg.from?.id;
-    const userName  = msg.from?.first_name || 'Pengguna';
-    let userText    = msg.text || msg.caption || "";
-
-    // ── Rate limiting ─────────────────────────────────────
-    if (userId && !rateCheck(userId)) return;
-
-    // ── Tracking statistik chat ───────────────────────────
-    if (userId && chatType !== 'private') {
-        if (!chatStats[chatId]) chatStats[chatId] = {};
-        if (!chatStats[chatId][userId]) chatStats[chatId][userId] = { name: userName, count: 0 };
-        chatStats[chatId][userId].count++;
-        chatStats[chatId][userId].name = userName;
-    }
-
-    // ── Cek AFK user yang balik ───────────────────────────
-    if (userId && msg.text && !msg.text.startsWith('/afk')) {
-        const key = `${chatId}_${userId}`;
-        if (afkUsers[key]) {
-            const since = Math.round((Date.now() - afkUsers[key].since) / 60000);
-            delete afkUsers[key];
-            await sendMessage(chatId, `👋 *${userName}* sudah kembali! (AFK selama ~${since} menit)`);
-        }
-    }
-
-    // ── Mention AFK user lain ─────────────────────────────
-    if (msg.reply_to_message?.from?.id) {
-        const repliedId = msg.reply_to_message.from.id;
-        const afkKey = `${chatId}_${repliedId}`;
-        if (afkUsers[afkKey]) {
-            const info = afkUsers[afkKey];
-            const since = Math.round((Date.now() - info.since) / 60000);
-            await sendMessage(chatId, `💤 *${info.name}* lagi AFK: _${info.reason}_ (sudah ${since} menit)`);
-        }
-    }
-
     try {
-        // ── Filter grup/channel: hanya respon jika disebut atau command ──
+        if (update.callback_query) {
+            await tgCall('answerCallbackQuery', { callback_query_id: update.callback_query.id });
+            res.status(200).send('OK');
+            return;
+        }
+
+        // Fitur Otomatis: Welcome Message Member Baru
+        if (update.message?.new_chat_members) {
+            const chatId = update.message.chat.id;
+            const cfg = welcomeConfig[chatId];
+            for (const member of update.message.new_chat_members) {
+                if (member.is_bot) continue;
+                const msgText = cfg?.message 
+                    ? cfg.message.replace('{name}', member.first_name)
+                    : `👋 Halo *${member.first_name}*, selamat datang di grup! Panggil gue pake /help ya.`;
+                await sendMessage(chatId, msgText);
+            }
+            res.status(200).send('OK');
+            return;
+        }
+
+        const msg = update.message || update.channel_post;
+        if (!msg) { res.status(200).send('OK'); return; }
+
+        const chatId   = msg.chat.id;
+        const chatType = msg.chat.type;
+        const userId   = msg.from?.id;
+        const userName = msg.from?.first_name || 'User';
+        let userText   = msg.text || msg.caption || "";
+
+        // Fitur Otomatis: Rate Limiter Anti Spam
+        if (userId && !rateCheck(userId)) { res.status(200).send('OK'); return; }
+
+        // Fitur Otomatis: Tracking Statistik Chat
+        if (userId && chatType !== 'private') {
+            if (!chatStats[chatId]) chatStats[chatId] = {};
+            if (!chatStats[chatId][userId]) chatStats[chatId][userId] = { name: userName, count: 0 };
+            chatStats[chatId][userId].count++;
+            chatStats[chatId][userId].name = userName;
+        }
+
+        // Fitur Otomatis: Deteksi User AFK Kembali
+        if (userId && msg.text && !msg.text.startsWith('/afk')) {
+            const afkKey = `${chatId}_${userId}`;
+            if (afkUsers[afkKey]) {
+                const duration = Math.round((Date.now() - afkUsers[afkKey].since) / 60000);
+                delete afkUsers[afkKey];
+                await sendMessage(chatId, `👋 *${userName}* sudah kembali online setelah AFK selama ~${duration} menit!`);
+            }
+        }
+
+        // Fitur Otomatis: Deteksi Mention User yang Sedang AFK
+        if (msg.reply_to_message?.from?.id) {
+            const repliedId = msg.reply_to_message.from.id;
+            const targetKey = `${chatId}_${repliedId}`;
+            if (afkUsers[targetKey]) {
+                const info = afkUsers[targetKey];
+                await sendMessage(chatId, `💤 Jangan diganggu dulu, *${info.name}* lagi AFK dengan alasan: _${info.reason}_`);
+            }
+        }
+
+        // Filter Grup/Channel: Cek Pemicu Chat Bot (Mention, Command, atau Reply)
         if (chatType !== 'private') {
             const botUsername = "@clawuddbot";
             const isMentioned = userText.toLowerCase().includes(botUsername.toLowerCase());
             const isCommand   = userText.startsWith('/');
             const isReply     = msg.reply_to_message?.from?.is_bot;
 
-            if (!isMentioned && !isCommand && !isReply) return;
+            if (!isMentioned && !isCommand && !isReply) { res.status(200).send('OK'); return; }
             userText = userText.replace(new RegExp(botUsername, 'gi'), '').trim();
         }
 
-        // ── Filter stiker masuk ───────────────────────────
+        // Filter Stiker Masuk
         if (msg.sticker) {
-            await sendMessage(chatId, "Stikernya keren! Tapi gue lebih jago bales teks atau analisis foto. 😄");
+            await sendMessage(chatId, "Stikernya seru abis! Tapi gue lebih jago bales teks chat atau analisis foto nih. 😄");
+            res.status(200).send('OK');
             return;
         }
 
-        // ── Command handler ───────────────────────────────
+        // Router Perintah Command Handler
         if (userText.startsWith('/')) {
             await handleCommand(msg, chatId, chatType, userId, userName, userText);
+            res.status(200).send('OK');
             return;
         }
 
-        // ── Handler foto (vision) ─────────────────────────
+        // Multimodal Vision Handler (Foto)
         let imageUrl = null;
         if (msg.photo) {
-            const photo   = msg.photo[msg.photo.length - 1];
+            const photo = msg.photo[msg.photo.length - 1];
             const fileRes = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/getFile?file_id=${photo.file_id}`);
             const fileData = await fileRes.json();
             imageUrl = `https://api.telegram.org/file/bot${TELEGRAM_TOKEN}/${fileData.result.file_path}`;
-            if (!userText) userText = "Coba jelaskan gambar ini.";
+            if (!userText) userText = "Coba jelaskan isi gambar ini.";
         }
 
-        // ── Handler dokumen teks ──────────────────────────
+        // Fitur Otomatis: Handler Analisis Dokumen File .txt
         if (msg.document && msg.document.mime_type === 'text/plain') {
-            const fileRes  = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/getFile?file_id=${msg.document.file_id}`);
+            const fileRes = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/getFile?file_id=${msg.document.file_id}`);
             const fileData = await fileRes.json();
-            const fileUrl  = `https://api.telegram.org/file/bot${TELEGRAM_TOKEN}/${fileData.result.file_path}`;
-            const content  = await (await fetch(fileUrl)).text();
-            userText = `Analisis dokumen ini:\n\n${content.slice(0, 3000)}`;
+            const fileUrl = `https://api.telegram.org/file/bot${TELEGRAM_TOKEN}/${fileData.result.file_path}`;
+            const textContent = await (await fetch(fileUrl)).text();
+            userText = `Lakukan analisis mendalam terhadap isi teks dokumen ini:\n\n${textContent.slice(0, 3000)}`;
         }
 
-        // ── Kalau gak ada konten → skip ───────────────────
-        if (!userText && !imageUrl) return;
+        if (!userText && !imageUrl) { res.status(200).send('OK'); return; }
 
-        // ── Kirim "mengetik..." ───────────────────────────
+        // Trigger Efek Indikator Mengetik Telegram
         await tgCall('sendChatAction', { chat_id: chatId, action: 'typing' });
 
-        // ── Call AI ───────────────────────────────────────
+        // Tembak Server AI Groq
         const rawReply = await callAI(chatId, userText, imageUrl);
         await sendAIReply(chatId, rawReply);
 
     } catch (error) {
-        console.error('[NYX ERROR]', error);
-        await sendMessage(chatId, `⚠️ *Crash:* \`${error.message}\``);
+        console.error('[NYX ENGINE CRASH]', error);
+        await sendMessage(chatId, `⚠️ *Crash Engine:* \`${error.message}\``);
+    }
+
+    // PENGAMAN AKHIR LIFE-CYCLE: Mengirimkan status OK ke Telegram di akhir eksekusi lengkap
+    if (!res.headersSent) {
+        res.status(200).send('OK');
     }
 });
 
-// ============================================================
-//  📡 HEALTH CHECK
-// ============================================================
-app.get('/', (req, res) => res.send('🤖 Nyx Bot is running!'));
+app.get('/', (req, res) => res.send('🤖 Nyx Engine Multi-Features is fully active!'));
 
 module.exports = app;
