@@ -14,7 +14,7 @@ app.post('/api', async (req, res) => {
     const chatId = update.message.chat.id;
     let userText = update.message.text || update.message.caption || "";
     let imageUrl = null;
-    let modelToUse = "openai/gpt-oss-120b"; // Tetap pakai andalan lo!
+    let modelToUse = "openai/gpt-oss-120b"; // Model utama andalan lo!
 
     try {
         // 1. FILTER STIKER
@@ -48,7 +48,8 @@ app.post('/api', async (req, res) => {
 
         // 3. JALUR FOTO
         if (update.message.photo) {
-            modelToUse = "llama-3.2-11b-vision"; 
+            // Menggunakan Llama 4 Scout, model multimodal vision terbaru di Groq server
+            modelToUse = "meta-llama/llama-4-scout-17b-16e-instruct"; 
             const photo = update.message.photo[update.message.photo.length - 1];
             const fileRes = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/getFile?file_id=${photo.file_id}`);
             const fileData = await fileRes.json();
@@ -65,7 +66,7 @@ app.post('/api', async (req, res) => {
             ? [{ type: "text", text: userText }, { type: "image_url", image_url: { url: imageUrl } }]
             : userText;
 
-        // 4. TEMBAK API
+        // 4. TEMBAK API GROQ
         const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${GROQ_API_KEY}`, 'Content-Type': 'application/json' },
@@ -86,12 +87,11 @@ app.post('/api', async (req, res) => {
         }
 
         const groqData = await groqRes.json();
-        const aiReply = groqData.choices?.[0]?.message?.content || "Duh, otaknya kosong nih...";
+        const aiReply = groqData.choices?.[0]?.message?.content || "Duh, otak gue lagi nge-hang sebentar...";
         await sendMessage(chatId, aiReply);
 
     } catch (error) {
         console.error(error);
-        // FIX: Menampilkan pesan error sistem asli ke Telegram biar gampang di-debug
         await sendMessage(chatId, `⚠️ **Crash Sistem:** \`${error.message}\``);
     }
 
