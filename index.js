@@ -5,7 +5,7 @@ app.use(express.json());
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
-const SYSTEM_PROMPT = "Nama kamu Nyx. Kamu AI yang asik, pinter, dan gak kaku. Jangan cuma bahas RPL kecuali ditanya. Gunakan gaya bahasa anak muda yang sopan (gue/lo atau aku/kamu). PENTING: Jangan pernah mengirimkan format tabel menggunakan garis pipa seperti '|---|' karena Telegram tidak mendukungnya. Jika ingin membuat perbandingan atau tips struktur folder, gunakan list poin biasa (- ) atau kurung di dalam blok kode (```) biar rapi.";
+const SYSTEM_PROMPT = "Nama kamu Nyx. Kamu AI yang asik, pinter, dan gak kaku. Jangan cuma bahas RPL kecuali ditanya. Gunakan bahasa gaul anak muda yang sopan (gue/lo atau aku/kamu). PENTING: Jangan kirim format tabel pipa '|---|'. Gunakan list poin atau code block hitam saja biar rapi di HP.";
 
 app.post('/api', async (req, res) => {
     const update = req.body;
@@ -14,7 +14,7 @@ app.post('/api', async (req, res) => {
     const chatId = update.message.chat.id;
     let userText = update.message.text || update.message.caption || "";
     let imageUrl = null;
-    let modelToUse = "openai/gpt-oss-120b";
+    let modelToUse = "openai/gpt-oss-120b"; // Tetap pakai andalan lo!
 
     try {
         // 1. FILTER STIKER
@@ -34,21 +34,11 @@ app.post('/api', async (req, res) => {
                     parse_mode: "Markdown",
                     reply_markup: {
                         inline_keyboard: [
-                            [
-                                { text: "🛍️ RelxShop Marketplace", web_app: { url: "[https://relxshop-kamu.vercel.app](https://relxshop-kamu.vercel.app)" } }
-                            ],
-                            [
-                                { text: "📂 Portfolio & Project RPL", web_app: { url: "[https://portfolio-kamu.vercel.app](https://portfolio-kamu.vercel.app)" } }
-                            ],
-                            [
-                                { text: "📊 Admin Dashboard", web_app: { url: "[https://admin-kamu.vercel.app](https://admin-kamu.vercel.app)" } }
-                            ],
-                            [
-                                { text: "🎮 Mini Game Pixel Art", web_app: { url: "[https://game-kamu.vercel.app](https://game-kamu.vercel.app)" } }
-                            ],
-                            [
-                                { text: "⚙️ Pengaturan Bot AI", web_app: { url: "[https://settings-kamu.vercel.app](https://settings-kamu.vercel.app)" } }
-                            ]
+                            [{ text: "🛍️ RelxShop Marketplace", web_app: { url: "https://relxshop-kamu.vercel.app" } }],
+                            [{ text: "📂 Portfolio & Project RPL", web_app: { url: "https://portfolio-kamu.vercel.app" } }],
+                            [{ text: "📊 Admin Dashboard", web_app: { url: "https://admin-kamu.vercel.app" } }],
+                            [{ text: "🎮 Mini Game Pixel Art", web_app: { url: "https://game-kamu.vercel.app" } }],
+                            [{ text: "⚙️ Pengaturan Bot AI", web_app: { url: "https://settings-kamu.vercel.app" } }]
                         ]
                     }
                 })
@@ -56,9 +46,8 @@ app.post('/api', async (req, res) => {
             return res.status(200).send('OK');
         }
 
-        // 3. JALUR CHAT AI (FOTO / TEKS)
+        // 3. JALUR FOTO
         if (update.message.photo) {
-            // FIX: Menggunakan versi produksi yang stabil tanpa teks '-preview'
             modelToUse = "llama-3.2-11b-vision"; 
             const photo = update.message.photo[update.message.photo.length - 1];
             const fileRes = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/getFile?file_id=${photo.file_id}`);
@@ -76,7 +65,8 @@ app.post('/api', async (req, res) => {
             ? [{ type: "text", text: userText }, { type: "image_url", image_url: { url: imageUrl } }]
             : userText;
 
-        const groqRes = await fetch("[https://api.groq.com/openai/v1/chat/completions](https://api.groq.com/openai/v1/chat/completions)", {
+        // 4. TEMBAK API
+        const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${GROQ_API_KEY}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -89,17 +79,20 @@ app.post('/api', async (req, res) => {
             })
         });
 
-        const groqData = await groqRes.json();
-        if (groqData.error) {
-            await sendMessage(chatId, `❌ **API Error:** ${groqData.error.message}`);
-        } else {
-            const aiReply = groqData.choices?.[0]?.message?.content || "Duh, otak gue lagi nge-hang sebentar...";
-            await sendMessage(chatId, aiReply);
+        if (!groqRes.ok) {
+            const errorText = await groqRes.text();
+            await sendMessage(chatId, `⚠️ **Server API Menolak:**\nStatus: ${groqRes.status}\nRespon: \`${errorText.slice(0, 100)}\``);
+            return res.status(200).send('OK');
         }
+
+        const groqData = await groqRes.json();
+        const aiReply = groqData.choices?.[0]?.message?.content || "Duh, otaknya kosong nih...";
+        await sendMessage(chatId, aiReply);
 
     } catch (error) {
         console.error(error);
-        await sendMessage(chatId, "Lagi ada gangguan teknis koneksi ke server nih.");
+        // FIX: Menampilkan pesan error sistem asli ke Telegram biar gampang di-debug
+        await sendMessage(chatId, `⚠️ **Crash Sistem:** \`${error.message}\``);
     }
 
     res.status(200).send('OK');
