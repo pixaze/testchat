@@ -5,7 +5,6 @@ app.use(express.json());
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
-// === [DATABASE STIKER RESMI NYX] ===
 const STICKER_DATABASE = {
     'ga_masuk_akal': 'CAACAgUAAxkBAAEROetqCBGCYTEiwNddAWfYDMuBYcxpowACDgcAAuHnkVVC-wM9VE7dtTsE',
     'anjing_berak': 'CAACAgUAAxkBAAEROe1qCBGI2BIwiqDGLQr_BCyvQ00fAgACAQgAAn-UkVUDOuSGOJp2mTsE',
@@ -14,20 +13,14 @@ const STICKER_DATABASE = {
     'oke': 'CAACAgUAAxkBAAEROfNqCBGZddU9hf1v1dIGXWCLrKOz_QACZAcAArP3mVX_YBCJBroceDsE'
 };
 
-// SYSTEM PROMPT: Mengajari AI cara menggunakan 5 stiker baru sesuai konteks obrolan
-const SYSTEM_PROMPT = `Nama kamu Nyx. Kamu AI yang asik, pinter, dan gak kaku. Gunakan bahasa gaul anak muda yang sopan (gue/lo atau aku/kamu). Jangan cuma bahas RPL kecuali ditanya.
+// SYSTEM PROMPT: Diperketat biar gak spam stiker!
+const SYSTEM_PROMPT = `Nama kamu Nyx. Kamu AI yang asik, pinter, dan gak kaku. Gunakan bahasa gaul anak muda. Jangan cuma bahas RPL kecuali ditanya.
 PENTING: Jangan kirim format tabel pipa '|---|'.
 
-FITUR STIKER AUTOMATIS:
-Jika ingin mengekspresikan perasaan lewat stiker, sisipkan kode [[STICKER:nama_stiker]] di dalam jawabanmu.
-Gunakan stiker yang cocok dengan kondisi berikut:
-1. ga_masuk_akal -> saat user nanya hal aneh, membingungkan, atau gak logis.
-2. anjing_berak -> saat merespon hal yang buruk, apes, situasi kocak/sarkas, atau hal yang bikin kesel ("tai lah").
-3. ngakak -> saat merespon hal lucu atau bercandaan.
-4. nangis -> saat sedih, kecewa, kasihan, atau pas dapet kabar buruk.
-5. oke -> saat setuju, konfirmasi, paham, atau mengiyakan sesuatu.
-
-Contoh pemakaian: "Siaapp, aman itu mah nanti gue bantu! [[STICKER:oke]]"`;
+ATURAN STIKER (SANGAT KETAT):
+Jangan terlalu sering mengirim stiker! Lebih dari 85% respon kamu harus berupa TEKS BIASA SAJA tanpa stiker. 
+Kamu HANYA boleh menyisipkan kode [[STICKER:nama_stiker]] jika suasananya benar-benar sangat cocok (misal: user sedang sial, melucu, atau meminta stiker secara eksplisit). Jika chatnya biasa saja, JANGAN kirim stiker.
+Pilihan stiker: ga_masuk_akal, anjing_berak, ngakak, nangis, oke.`;
 
 app.post('/api', async (req, res) => {
     const update = req.body;
@@ -36,16 +29,16 @@ app.post('/api', async (req, res) => {
     const chatId = update.message.chat.id;
     let userText = update.message.text || update.message.caption || "";
     let imageUrl = null;
-    let modelToUse = "openai/gpt-oss-120b"; // Model andalan teks lo
+    let modelToUse = "openai/gpt-oss-120b";
 
     try {
-        // 1. FILTER STIKER MASUK (Biar gak looping)
+        // FILTER STIKER MASUK
         if (update.message.sticker) {
-            await sendMessage(chatId, "Wih, stikernya boleh juga! Tapi gue lebih jago bales chat teks atau liat foto nih. [[STICKER:oke]]");
+            await sendMessage(chatId, "Stikernya oke juga! Tapi gue lebih jago bales chat teks atau liat foto nih.");
             return res.status(200).send('OK');
         } 
 
-        // 2. HANDLER COMMAND /menu
+        // HANDLER COMMAND /menu
         if (userText === '/menu') {
             await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
                 method: 'POST',
@@ -68,9 +61,9 @@ app.post('/api', async (req, res) => {
             return res.status(200).send('OK');
         }
 
-        // 3. JALUR FOTO
+        // JALUR FOTO
         if (update.message.photo) {
-            modelToUse = "meta-llama/llama-4-scout-17b-16e-instruct"; // Model vision di Groq server lo
+            modelToUse = "meta-llama/llama-4-scout-17b-16e-instruct"; 
             const photo = update.message.photo[update.message.photo.length - 1];
             const fileRes = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/getFile?file_id=${photo.file_id}`);
             const fileData = await fileRes.json();
@@ -83,21 +76,15 @@ app.post('/api', async (req, res) => {
             return res.status(200).send('OK');
         }
 
-        let contentPayload = imageUrl 
-            ? [{ type: "text", text: userText }, { type: "image_url", image_url: { url: imageUrl } }]
-            : userText;
+        let contentPayload = imageUrl ? [{ type: "text", text: userText }, { type: "image_url", image_url: { url: imageUrl } }] : userText;
 
-        // 4. TEMBAK API GROQ
         const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${GROQ_API_KEY}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 model: modelToUse,
-                messages: [
-                    { role: "system", content: SYSTEM_PROMPT },
-                    { role: "user", content: contentPayload }
-                ],
-                temperature: 0.7
+                messages: [{ role: "system", content: SYSTEM_PROMPT }, { role: "user", content: contentPayload }],
+                temperature: 0.5 // Diturunkan sedikit biar AI lebih patuh aturan
             })
         });
 
@@ -110,7 +97,7 @@ app.post('/api', async (req, res) => {
         const groqData = await groqRes.json();
         const rawAiReply = groqData.choices?.[0]?.message?.content || "Duh, otak gue lagi kosong nih...";
 
-        // === [PARSING LOGIKA STIKER OTOMATIS] ===
+        // PARSING LOGIKA STIKER
         const stickerMatch = rawAiReply.match(/\[\[STICKER:(.*?)\]\]/);
         let finalReply = rawAiReply;
 
@@ -119,14 +106,11 @@ app.post('/api', async (req, res) => {
             const stickerFileId = STICKER_DATABASE[stickerName]; 
 
             if (stickerFileId) {
-                // Kirim stikernya dulu
                 await sendSticker(chatId, stickerFileId);
-                // Bersihin kode tag stiker dari teks biar ga risih dibaca user
                 finalReply = rawAiReply.replace(/\[\[STICKER:(.*?)\]\]/g, '').trim();
             }
         }
 
-        // Kirim teks jawabannya
         if (finalReply) {
             await sendMessage(chatId, finalReply);
         }
@@ -139,7 +123,7 @@ app.post('/api', async (req, res) => {
     res.status(200).send('OK');
 });
 
-// --- HELPERS INTERFACE ---
+// --- HELPERS ---
 async function sendMessage(chatId, text) {
     await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
         method: 'POST',
@@ -153,6 +137,15 @@ async function sendSticker(chatId, stickerFileId) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ chat_id: chatId, sticker: stickerFileId })
+    });
+}
+
+// Fungsi baru untuk masa depan kalau Mini Apps lo mau trigger kirim file dokumen via Bot
+async function sendDocument(chatId, documentUrl, captionText) {
+    await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendDocument`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId, document: documentUrl, caption: captionText, parse_mode: "Markdown" })
     });
 }
 
