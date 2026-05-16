@@ -5,7 +5,7 @@ app.use(express.json());
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
-const SYSTEM_PROMPT = "Nama kamu Nyx. Kamu AI yang asik, pinter, dan gak kaku. Jangan cuma bahas RPL kecuali ditanya. Gunakan gaya bahasa anak muda yang sopan (gue/lo atau aku/kamu).";
+const SYSTEM_PROMPT = "Nama kamu Nyx. Kamu AI yang asik, pinter, dan gak kaku. Jangan cuma bahas RPL kecuali ditanya. Gunakan gaya bahasa anak muda yang sopan (gue/lo atau aku/kamu). PENTING: Jangan pernah mengirimkan format tabel menggunakan garis pipa seperti '|---|' karena Telegram tidak mendukungnya. Jika ingin membuat perbandingan atau tips struktur folder, gunakan list poin biasa (- ) atau kurung di dalam blok kode (```) biar rapi.";
 
 app.post('/api', async (req, res) => {
     const update = req.body;
@@ -30,19 +30,24 @@ app.post('/api', async (req, res) => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     chat_id: chatId,
-                    text: "Klik tombol di bawah ini buat buka **Menu Website** kamu! 🌐",
+                    text: "🌐 **Nyx Portal Mini Apps** 🌐\n\nSilakan pilih salah satu dari **5 aplikasi** di bawah ini buat langsung dibuka di Telegram lo:",
                     parse_mode: "Markdown",
                     reply_markup: {
                         inline_keyboard: [
                             [
-                                { 
-                                    text: "Buka Website Nyx 🚀", 
-                                    // GANTI url di bawah ini dengan link website toko/portfolio kamu (Wajib HTTPS)
-                                    web_app: { url: "https://nyx-web-kamu.vercel.app" } 
-                                }
+                                { text: "🛍️ RelxShop Marketplace", web_app: { url: "[https://relxshop-kamu.vercel.app](https://relxshop-kamu.vercel.app)" } }
                             ],
                             [
-                                { text: "Hubungi Admin 👨‍💻", url: "https://t.me/username_lo" }
+                                { text: "📂 Portfolio & Project RPL", web_app: { url: "[https://portfolio-kamu.vercel.app](https://portfolio-kamu.vercel.app)" } }
+                            ],
+                            [
+                                { text: "📊 Admin Dashboard", web_app: { url: "[https://admin-kamu.vercel.app](https://admin-kamu.vercel.app)" } }
+                            ],
+                            [
+                                { text: "🎮 Mini Game Pixel Art", web_app: { url: "[https://game-kamu.vercel.app](https://game-kamu.vercel.app)" } }
+                            ],
+                            [
+                                { text: "⚙️ Pengaturan Bot AI", web_app: { url: "[https://settings-kamu.vercel.app](https://settings-kamu.vercel.app)" } }
                             ]
                         ]
                     }
@@ -51,9 +56,10 @@ app.post('/api', async (req, res) => {
             return res.status(200).send('OK');
         }
 
-        // JALUR CHAT AI SEPERTI BIASA
+        // 3. JALUR CHAT AI (FOTO / TEKS)
         if (update.message.photo) {
-            modelToUse = "llama-3.2-11b-vision-preview";
+            // FIX: Menggunakan versi produksi yang stabil tanpa teks '-preview'
+            modelToUse = "llama-3.2-11b-vision"; 
             const photo = update.message.photo[update.message.photo.length - 1];
             const fileRes = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/getFile?file_id=${photo.file_id}`);
             const fileData = await fileRes.json();
@@ -70,7 +76,7 @@ app.post('/api', async (req, res) => {
             ? [{ type: "text", text: userText }, { type: "image_url", image_url: { url: imageUrl } }]
             : userText;
 
-        const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        const groqRes = await fetch("[https://api.groq.com/openai/v1/chat/completions](https://api.groq.com/openai/v1/chat/completions)", {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${GROQ_API_KEY}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({
