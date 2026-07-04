@@ -864,8 +864,8 @@ async function sendVideo(chatId, videoUrl, caption = '') {
 }
 
 async function handleTikTok(chatId, tikTokUrl) {
-    // Notif loading
     await tgCall('sendChatAction', { chat_id: chatId, action: 'upload_video' });
+    await sendMessage(chatId, '⏳ Lagi proses download videonya, tunggu sebentar...');
 
     const apiUrl = `https://tiktok-max-quality.p.rapidapi.com/download/?url=${encodeURIComponent(tikTokUrl)}`;
 
@@ -881,52 +881,58 @@ async function handleTikTok(chatId, tikTokUrl) {
     if (!apiRes.ok) {
         const errText = await apiRes.text();
         console.error('[TikTok API]', apiRes.status, errText.slice(0, 200));
-        await sendMessage(chatId, `❌ Gagal ambil data dari TikTok API (${apiRes.status}). Coba lagi bentar lagi.`);
+        await sendMessage(chatId, `❌ TikTok API error (${apiRes.status}). Coba lagi bentar lagi.`);
         return;
     }
 
     const data = await apiRes.json();
-    console.log('[TikTok RAW]', JSON.stringify(data).slice(0, 500));
+    console.log('[TikTok RAW]', JSON.stringify(data).slice(0, 600));
 
-    // ── Cari URL video original (tanpa watermark) ─────────
-    // Struktur API bisa beda-beda, coba semua kemungkinan path
+    // ── Struktur API: { status, message, download_url } ──
+    // Prioritas: download_url (root) → fallback path lain
     const video =
-        data?.data?.play               ||   // format A: data.play (no-wm)
-        data?.data?.hdplay             ||   // format A: data.hdplay
-        data?.data?.video?.play_addr?.url_list?.[0] ||  // format B
-        data?.data?.video?.download_addr?.url_list?.[0] ||
-        data?.play                     ||   // format C: root-level
+        data?.download_url             ||   // ✅ STRUKTUR UTAMA API INI
+        data?.data?.play               ||   // fallback format lain
+        data?.data?.hdplay             ||
+        data?.data?.nwm_video_url      ||
+        data?.data?.video?.play_addr?.url_list?.[0] ||
+        data?.play                     ||
         data?.hdplay                   ||
-        data?.nwm_video_url            ||   // format D
+        data?.nwm_video_url            ||
         data?.video_url                ||
         null;
 
+    // ── Info kualitas dari field "message" ───────────────
+    const quality = data?.message || '';   // contoh: "Original 4K (96MB)"
+    const title   = data?.data?.title || data?.title || '';
+    const author  = data?.data?.author?.nickname || '';
+
     if (!video) {
         await sendMessage(chatId,
-            `⚠️ Gue dapet data dari API tapi gak nemu URL videonya.\n\`\`\`\n${JSON.stringify(data).slice(0, 300)}\n\`\`\``
+            `⚠️ API berhasil dipanggil tapi URL video gak ditemukan.\nResponse:\n\`\`\`\n${JSON.stringify(data).slice(0, 400)}\n\`\`\``
         );
         return;
     }
 
-    // ── Info tambahan kalau ada ──────────────────────────
-    const title  = data?.data?.title || data?.title || '';
-    const author = data?.data?.author?.nickname || data?.data?.music?.author || '';
-    const caption = [
-        title  ? `🎬 *${title.slice(0, 80)}*`         : '',
-        author ? `👤 ${author}`                        : '',
-        `🔗 [Sumber](${tikTokUrl})`
-    ].filter(Boolean).join('\n');
+    // ── Caption video ─────────────────────────────────────
+    const captionParts = [];
+    if (title)   captionParts.push(`🎬 *${title.slice(0, 100)}*`);
+    if (author)  captionParts.push(`👤 ${author}`);
+    if (quality) captionParts.push(`📦 ${quality}`);
+    captionParts.push(`🔗 [Link TikTok](${tikTokUrl})`);
+    const caption = captionParts.join('\n');
 
-    // ── Kirim video ──────────────────────────────────────
+    // ── Kirim video ke Telegram ───────────────────────────
     const sendResult = await sendVideo(chatId, video, caption);
 
     if (!sendResult?.ok) {
-        // Kalau Telegram gak bisa fetch langsung (URL butuh header khusus),
-        // kirim link-nya aja sebagai fallback
-        console.error('[TikTok sendVideo]', JSON.stringify(sendResult).slice(0, 200));
+        // Fallback: Telegram gak bisa fetch URL-nya (redirect/expired)
+        // Kirim link langsung buat download manual
+        console.error('[TikTok sendVideo fail]', JSON.stringify(sendResult).slice(0, 300));
         await sendMessage(chatId,
-            `📥 *Video TikTok siap!*\n${caption ? caption + '\n\n' : ''}` +
-            `Telegram gak bisa auto-kirim. Klik link ini buat download langsung:\n${video}`
+            `✅ *Video TikTok ketemu!*\n${quality ? `📦 Kualitas: ${quality}\n` : ''}` +
+            `\nTelegram gak bisa auto-kirim filenya. Tap link di bawah buat download:\n\n` +
+            `[⬇️ Download Video](${video})`
         );
     }
 }
