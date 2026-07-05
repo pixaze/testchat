@@ -1,4 +1,5 @@
 const express = require('express');
+const pdfParse = require('pdf-parse'); // npm install pdf-parse
 const app = express();
 app.use(express.json());
 
@@ -280,12 +281,22 @@ Ketik /help buat liat semua fitur lengkapnya. 🚀`
 /translate [lang] [teks] — Terjemahkan teks
 /code [bahasa] [deskripsi] — Generate kode
 /roast [@user] — Roast seseorang (for fun)
+/img [prompt] — Generate gambar AI (default 9:16)
 
 *🛠️ Tools*
 /cuaca [kota] — Info cuaca kota (simulasi)
 /kalkulator [ekspresi] — Hitung ekspresi matematika
 /reminder [menit] [pesan] — Set pengingat
 /poll [pertanyaan] | [op1] | [op2] | ... — Buat polling
+/summarize [link] — Ringkas artikel dari link
+/ocr — Reply/kirim foto buat extract teksnya
+/kirim link TikTok — Auto-download video TikTok
+
+*🌐 Data Real-Time*
+/berita [topik] — Cari berita terkini
+/kurs [dari] [ke] — Cek kurs mata uang (contoh: /kurs USD IDR)
+/cari [apapun] — Pencarian umum data terkini
+_Nyx juga otomatis nyari data terbaru kalau chat biasa nyinggung "hari ini", "kurs", "berita", dll._
 
 *🎮 Games & Fun*
 /trivia — Tebak pertanyaan random
@@ -384,6 +395,47 @@ Ketik /help buat liat semua fitur lengkapnya. 🚀`
         return;
     }
 
+    // ── /img — generate gambar AI (Flux) ───────────────────
+    if (cmd === '/img' || cmd === '/image' || cmd === '/generate') {
+        if (!args) {
+            await sendMessage(chatId,
+`🎨 Contoh: \`/img kucing astronot di bulan\`
+
+Ukuran default: *9:16 (portrait)*.
+Mau ganti ukuran? Tambahin di akhir prompt: \`1:1\`, \`16:9\`, \`3:4\`, atau \`4:3\`.
+Contoh: \`/img pemandangan gunung 16:9\``
+            );
+            return;
+        }
+
+        await tgCall('sendChatAction', { chat_id: chatId, action: 'upload_photo' });
+        await sendMessage(chatId, "🎨 Lagi gambar, tunggu bentar ya...");
+
+        try {
+            const { prompt, size } = parseImagePrompt(args);
+            const results = await generateImage(prompt, size);
+
+            if (!results.length) {
+                await sendMessage(chatId, "⚠️ Gambar gak bisa ditampilkan (kemungkinan hasilnya kena filter konten). Coba prompt lain ya.");
+                return;
+            }
+
+            // Kirim semua hasil gambar yang lolos filter aman
+            for (const img of results) {
+                await tgCall('sendPhoto', {
+                    chat_id: chatId,
+                    photo: img.origin || img.thumb,
+                    caption: `🎨 *"${prompt}"*\n📐 Ukuran: ${size}`,
+                    parse_mode: "Markdown"
+                });
+            }
+        } catch (err) {
+            console.error('[Image Gen Error]', err.message);
+            await sendMessage(chatId, `❌ Gagal generate gambar: ${err.message}`);
+        }
+        return;
+    }
+
     // ── /kalkulator ───────────────────────────────────────
     if (cmd === '/kalkulator' || cmd === '/calc') {
         if (!args) { await sendMessage(chatId, "Contoh: /kalkulator 25 * 4 + 10"); return; }
@@ -464,6 +516,120 @@ Ketik /help buat liat semua fitur lengkapnya. 🚀`
         if (!args) { await sendMessage(chatId, "Contoh: /zodiak scorpio"); return; }
         const reply = await callAI(chatId, `Berikan ramalan zodiak ${args} hari ini yang fun, singkat (max 3 kalimat), dan gak terlalu serius.`);
         await sendAIReply(chatId, reply);
+        return;
+    }
+
+    // ── /summarize — ringkas artikel dari link ────────────
+    if (cmd === '/summarize' || cmd === '/ringkaslink') {
+        if (!args || !/^https?:\/\//i.test(args)) {
+            await sendMessage(chatId, "Contoh: /summarize https://www.contoh.com/artikel-berita");
+            return;
+        }
+        await sendMessage(chatId, "⏳ Lagi baca artikelnya, tunggu bentar...");
+        try {
+            const pageRes = await fetch(args, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+            if (!pageRes.ok) {
+                await sendMessage(chatId, `❌ Gagal buka link (status ${pageRes.status}).`);
+                return;
+            }
+            const html = await pageRes.text();
+            const text = stripHTML(html).slice(0, 8000);
+            if (!text || text.length < 200) {
+                await sendMessage(chatId, "❌ Gak bisa extract konten dari link ini. Kemungkinan situsnya butuh JavaScript buat nampilin isi.");
+                return;
+            }
+            const reply = await callAI(chatId, `Ringkas artikel di bawah ini dalam bahasa Indonesia santai, poin-poin penting aja (max 5 poin):\n\n${text}`);
+            await sendAIReply(chatId, reply);
+        } catch (err) {
+            await sendMessage(chatId, `❌ Gagal proses link: ${err.message}`);
+        }
+        return;
+    }
+
+    // ── /ocr — extract teks dari foto ──────────────────────
+    if (cmd === '/ocr') {
+        const targetMsg = msg.reply_to_message?.photo ? msg.reply_to_message : (msg.photo ? msg : null);
+        if (!targetMsg) {
+            await sendMessage(chatId, "Reply ke foto dengan /ocr, atau kirim foto dengan caption /ocr buat extract teksnya.");
+            return;
+        }
+        await tgCall('sendChatAction', { chat_id: chatId, action: 'typing' });
+        try {
+            const photo = targetMsg.photo[targetMsg.photo.length - 1];
+            const fileRes = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/getFile?file_id=${photo.file_id}`);
+            const fileData = await fileRes.json();
+            const imgUrl = `https://api.telegram.org/file/bot${TELEGRAM_TOKEN}/${fileData.result.file_path}`;
+            const reply = await callAI(chatId, "Baca dan tuliskan SEMUA teks yang ada di gambar ini persis apa adanya (verbatim), tanpa komentar atau tambahan lain. Kalau gak ada teks yang kebaca, bilang 'Tidak ada teks yang terdeteksi di gambar ini.'", imgUrl);
+            await sendMessage(chatId, `📝 *Hasil OCR:*\n\n${reply}`);
+        } catch (err) {
+            await sendMessage(chatId, `❌ Gagal proses OCR: ${err.message}`);
+        }
+        return;
+    }
+
+    // ── /kurs — cek kurs mata uang real-time ──────────────
+    if (cmd === '/kurs') {
+        const parts = args.split(' ').map(p => p.toUpperCase()).filter(Boolean);
+        const from = parts[0] || 'USD';
+        const to   = parts[1] || 'IDR';
+        try {
+            const result = await getCurrencyRate(from, to);
+            if (!result) {
+                await sendMessage(chatId, `❌ Kode mata uang \`${from}\` atau \`${to}\` gak valid. Contoh: /kurs USD IDR`);
+                return;
+            }
+            await sendMessage(chatId,
+`💱 *Kurs ${from} → ${to}* _(real-time)_
+
+1 ${from} = *${result.rate.toLocaleString('id-ID')} ${to}*
+
+🕐 Update terakhir: ${result.lastUpdate}`
+            );
+        } catch (err) {
+            await sendMessage(chatId, `❌ Gagal ambil data kurs: ${err.message}`);
+        }
+        return;
+    }
+
+    // ── /berita — cari berita terkini ─────────────────────
+    if (cmd === '/berita') {
+        if (!args) { await sendMessage(chatId, "Contoh: /berita gempa jakarta"); return; }
+        await sendMessage(chatId, "🔍 Lagi nyari berita terbaru...");
+        try {
+            const results = await webSearch(`berita ${args} terbaru hari ini`, 5);
+            if (!results.length) {
+                await sendMessage(chatId, "❌ Gak nemu berita terkait. Coba kata kunci lain.");
+                return;
+            }
+            const context = formatSearchContext(results);
+            const reply = await callAI(chatId,
+                `Hari ini tanggal ${todayID()}. Berdasarkan hasil pencarian real-time berikut (bukan dari ingatan lama kamu), buatkan ringkasan berita terkini tentang "${args}" dalam bahasa santai. Sebutkan sumber di tiap poin:\n\n${context}`
+            );
+            await sendAIReply(chatId, reply);
+        } catch (err) {
+            await sendMessage(chatId, `❌ Gagal cari berita: ${err.message}`);
+        }
+        return;
+    }
+
+    // ── /cari — pencarian umum real-time ──────────────────
+    if (cmd === '/cari' || cmd === '/search') {
+        if (!args) { await sendMessage(chatId, "Contoh: /cari harga bitcoin hari ini"); return; }
+        await sendMessage(chatId, "🔍 Nyari info terbaru...");
+        try {
+            const results = await webSearch(args, 5);
+            if (!results.length) {
+                await sendMessage(chatId, "❌ Gak nemu hasil. Coba kata kunci lain.");
+                return;
+            }
+            const context = formatSearchContext(results);
+            const reply = await callAI(chatId,
+                `Hari ini tanggal ${todayID()}. Jawab pertanyaan/topik "${args}" berdasarkan data pencarian real-time berikut (bukan dari ingatan lama kamu). Jawab singkat, jelas, sebutkan sumbernya:\n\n${context}`
+            );
+            await sendAIReply(chatId, reply);
+        } catch (err) {
+            await sendMessage(chatId, `❌ Gagal cari info: ${err.message}`);
+        }
         return;
     }
 
@@ -828,6 +994,44 @@ app.post('/api', async (req, res) => {
             userText = `Analisis dokumen ini:\n\n${content.slice(0, 3000)}`;
         }
 
+        // ── Handler dokumen PDF ────────────────────────────
+        if (msg.document && msg.document.mime_type === 'application/pdf') {
+            await tgCall('sendChatAction', { chat_id: chatId, action: 'typing' });
+            await sendMessage(chatId, "⏳ Lagi baca isi PDF-nya...");
+            try {
+                const fileRes  = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/getFile?file_id=${msg.document.file_id}`);
+                const fileData = await fileRes.json();
+                const fileUrl  = `https://api.telegram.org/file/bot${TELEGRAM_TOKEN}/${fileData.result.file_path}`;
+                const arrBuf   = await (await fetch(fileUrl)).arrayBuffer();
+                const pdfData  = await pdfParse(Buffer.from(arrBuf));
+                const extracted = (pdfData.text || '').trim();
+
+                if (!extracted || extracted.length < 30) {
+                    await sendMessage(chatId, "⚠️ Teks di PDF ini gak bisa di-extract otomatis — kemungkinan PDF hasil scan (gambar), bukan teks asli.");
+                    return res.status(200).send('OK');
+                }
+
+                userText = userText
+                    ? `${userText}\n\nIsi dokumen PDF:\n${extracted.slice(0, 8000)}`
+                    : `Analisis dan ringkas isi dokumen PDF berikut:\n\n${extracted.slice(0, 8000)}`;
+            } catch (err) {
+                console.error('[PDF parse error]', err.message);
+                await sendMessage(chatId, `❌ Gagal baca PDF: ${err.message}`);
+                return res.status(200).send('OK');
+            }
+        }
+
+        // ── Deteksi kebutuhan data real-time (berita/kurs/dll) ──
+        if (!imageUrl && userText && needsRealtimeSearch(userText)) {
+            await sendMessage(chatId, "🔍 Bentar, gue cariin data terbarunya dulu...");
+            const results = await webSearch(userText, 5);
+            if (results.length) {
+                const context = formatSearchContext(results);
+                userText = `Hari ini tanggal ${todayID()}. Jawab pertanyaan user berikut berdasarkan data pencarian real-time di bawah ini (JANGAN pakai ingatan lama kamu karena datanya bisa udah basi). Sebutkan sumber kalau relevan.\n\nData pencarian:\n${context}\n\nPertanyaan user: ${userText}`;
+            }
+            // Kalau search gagal/kosong, lanjut ke AI biasa tanpa konteks tambahan
+        }
+
         // ── Kalau gak ada konten → skip ───────────────────
         if (!userText && !imageUrl) return res.status(200).send('OK');
 
@@ -845,6 +1049,171 @@ app.post('/api', async (req, res) => {
 
     res.status(200).send('OK');
 });
+
+// ============================================================
+//  🌐 REAL-TIME WEB SEARCH & DATA HELPERS
+// ============================================================
+
+/** Format tanggal hari ini dalam Bahasa Indonesia */
+function todayID() {
+    return new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+/** Bersihkan tag HTML jadi teks polos */
+function stripHTML(html) {
+    return html
+        .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+        .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+        .replace(/<nav[\s\S]*?<\/nav>/gi, ' ')
+        .replace(/<footer[\s\S]*?<\/footer>/gi, ' ')
+        .replace(/<header[\s\S]*?<\/header>/gi, ' ')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/&nbsp;/g, ' ')
+        .replace(/&amp;/g, '&')
+        .replace(/&quot;/g, '"')
+        .replace(/&#0?39;/g, "'")
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+/** Ekstrak URL asli dari link redirect DuckDuckGo (/l/?uddg=...) */
+function extractRealUrl(ddgUrl) {
+    try {
+        const u = new URL(ddgUrl, 'https://duckduckgo.com');
+        const uddg = u.searchParams.get('uddg');
+        return uddg ? decodeURIComponent(uddg) : ddgUrl;
+    } catch {
+        return ddgUrl;
+    }
+}
+
+/**
+ * Web search real-time pakai DuckDuckGo HTML (gratis, tanpa API key).
+ * Mengembalikan array { title, snippet, url }.
+ */
+async function webSearch(query, maxResults = 5) {
+    try {
+        const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+        const res = await fetch(url, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
+        });
+        const html = await res.text();
+
+        const results = [];
+        const blockRegex = /<a rel="nofollow" class="result__a" href="([^"]+)">([\s\S]*?)<\/a>[\s\S]*?<a[^>]*class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g;
+        let match;
+        while ((match = blockRegex.exec(html)) !== null && results.length < maxResults) {
+            results.push({
+                url: extractRealUrl(match[1]),
+                title: stripHTML(match[2]),
+                snippet: stripHTML(match[3])
+            });
+        }
+        return results;
+    } catch (err) {
+        console.error('[webSearch]', err.message);
+        return [];
+    }
+}
+
+/** Format hasil search jadi konteks teks buat dikasih ke AI */
+function formatSearchContext(results) {
+    return results.map((r, i) => `${i + 1}. ${r.title}\n${r.snippet}\nSumber: ${r.url}`).join('\n\n');
+}
+
+/** Ambil kurs mata uang real-time (gratis, tanpa API key) */
+async function getCurrencyRate(from, to) {
+    const res = await fetch(`https://open.er-api.com/v6/latest/${from}`);
+    const data = await res.json();
+    if (data.result !== 'success') return null;
+    const rate = data.rates[to];
+    if (!rate) return null;
+    return { rate, lastUpdate: data.time_last_update_utc };
+}
+
+/** Kata kunci yang menandakan user butuh data real-time/terkini */
+const REALTIME_KEYWORDS = [
+    'berita', 'kurs', 'harga saham', 'harga emas', 'harga bitcoin', 'harga minyak',
+    'hari ini', 'sekarang ini', 'terkini', 'terbaru', 'cuaca sekarang',
+    'siapa presiden', 'siapa juara', 'hasil pertandingan', 'skor pertandingan'
+];
+
+function needsRealtimeSearch(text) {
+    const lower = text.toLowerCase();
+    return REALTIME_KEYWORDS.some(k => lower.includes(k));
+}
+
+// ============================================================
+//  🎨 AI IMAGE GENERATOR (Flux)
+// ============================================================
+
+/** Aspect ratio yang didukung API. Default: "9-16" (portrait) */
+const IMAGE_SIZE_MAP = {
+    '9:16': '9-16', '9-16': '9-16', 'portrait': '9-16', 'vertikal': '9-16',
+    '16:9': '16-9', '16-9': '16-9', 'landscape': '16-9', 'horizontal': '16-9',
+    '1:1': '1-1',   '1-1': '1-1',   'square': '1-1',   'kotak': '1-1',
+    '3:4': '3-4',   '3-4': '3-4',
+    '4:3': '4-3',   '4-3': '4-3',
+};
+
+/**
+ * Deteksi ukuran dari teks prompt user (kalau ada), lalu bersihkan prompt-nya.
+ * Return { prompt, size }
+ */
+function parseImagePrompt(rawArgs) {
+    let size = '9-16'; // default sesuai request
+    let prompt = rawArgs;
+
+    // Cari pola ukuran di akhir/dalam teks, misal "kucing lucu 1:1" atau "ukuran 16:9"
+    const sizeRegex = /\b(9:16|9-16|16:9|16-9|1:1|1-1|3:4|3-4|4:3|4-3|portrait|landscape|square|kotak|vertikal|horizontal)\b/i;
+    const match = rawArgs.match(sizeRegex);
+    if (match) {
+        const key = match[1].toLowerCase();
+        if (IMAGE_SIZE_MAP[key]) {
+            size = IMAGE_SIZE_MAP[key];
+            prompt = rawArgs.replace(sizeRegex, '').replace(/\bukuran\b/gi, '').trim();
+        }
+    }
+
+    return { prompt, size };
+}
+
+/**
+ * Generate gambar via Flux API. NSFW SELALU di-force false demi keamanan,
+ * apapun yang diminta user — hasil ber-flag nsfw:true otomatis difilter/dibuang.
+ */
+async function generateImage(prompt, size = '9-16', styleId = 4) {
+    const res = await fetch('https://ai-text-to-image-generator-flux-free-api.p.rapidapi.com/aaaaaaaaaaaaaaaaaiimagegenerator/quick.php', {
+        method: 'POST',
+        headers: {
+            'Content-Type':    'application/json',
+            'x-rapidapi-host': 'ai-text-to-image-generator-flux-free-api.p.rapidapi.com',
+            'x-rapidapi-key':  RAPIDAPI_KEY
+        },
+        body: JSON.stringify({
+            prompt: prompt,
+            style_id: styleId,
+            size: size,
+            nsfw: false // 🔒 selalu false, gak boleh diubah oleh input user
+        })
+    });
+
+    if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`API ${res.status}: ${errText.slice(0, 150)}`);
+    }
+
+    const data = await res.json();
+    const rawResults = data?.final_result || [];
+
+    // 🔒 FILTER KERAS: buang paksa semua hasil yang ke-flag nsfw true,
+    // terlepas dari apapun yang diminta atau dikembalikan API.
+    const safeResults = rawResults.filter(r => r.nsfw !== true);
+
+    return safeResults;
+}
 
 // ============================================================
 //  🎵 TIKTOK DOWNLOADER
